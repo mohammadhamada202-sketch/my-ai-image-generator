@@ -4,3 +4,4 @@ diffusers
 transformers
 accelerate
 safetensors
+invisible-watermark
