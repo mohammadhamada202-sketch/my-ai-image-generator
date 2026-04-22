@@ -1,8 +1,8 @@
 runpod
-torch
-diffusers
-transformers
-accelerate
+--extra-index-url https://download.pytorch.org/whl/cu121
+torch==2.2.1
+diffusers==0.25.0
+transformers==4.38.1
+accelerate==0.27.2
 deep_translator
-pillow
 safetensors
