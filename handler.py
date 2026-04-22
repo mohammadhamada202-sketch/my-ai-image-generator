@@ -25,6 +25,7 @@ def load_model():
     except Exception as e:
         print(f"❌ خطأ فادح في تحميل الموديل: {str(e)}")
         return None
+        
 
 # تشغيل التحميل الأولي
 generator_pipe = load_model()
