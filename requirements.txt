@@ -4,3 +4,5 @@ diffusers
 transformers
 accelerate
 deep_translator
+pillow
+safetensors
