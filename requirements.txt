@@ -1,9 +1,6 @@
 runpod
 torch
-diffusers==0.24.0
-transformers==4.36.0
-accelerate==0.25.0
-huggingface_hub==0.19.4
-deep_translator
+diffusers
+transformers
+accelerate
 safetensors
-pillow
