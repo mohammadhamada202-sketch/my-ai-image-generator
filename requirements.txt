@@ -3,3 +3,5 @@ diffusers==0.26.3
 transformers==4.38.2
 accelerate==0.27.2
 googletrans==4.0.0-rc1
+invisible-watermark>=0.2.0
+safetensors>=0.4.1
