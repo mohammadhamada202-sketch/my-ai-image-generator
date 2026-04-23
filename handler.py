@@ -1,6 +1,8 @@
 import runpod
 import torch
 import huggingface_hub
+import base64
+import os
 from diffusers import StableDiffusionXLPipeline
 
 # --- [1] حل مشكلة الإصدارات في HuggingFace ---
@@ -20,28 +22,27 @@ def setup():
         use_safetensors=True
     ).to("cuda")
     
-    # --- [3] محاولة تفعيل xformers بأمان ---
+    # محاولة تفعيل xformers لتسريع الأداء
     try:
         pipe.enable_xformers_memory_efficient_attention()
-        print("--- [OK] تم تفعيل xformers بنجاح لتسريع الأداء ---")
+        print("--- [OK] تم تفعيل xformers بنجاح ---")
     except Exception as e:
-        print(f"--- [INFO] سيتم العمل بدون xformers (السبب: {str(e)}) ---")
+        print(f"--- [INFO] سيتم العمل بدون xformers ---")
     
-    print("--- [READY] السيرفر جاهز تماماً لاستلام الطلبات ---")
+    print("--- [READY] السيرفر جاهز لاستلام الطلبات ---")
     return pipe
 
-# تشغيل الإعداد مرة واحدة فقط
+# تشغيل الإعداد مرة واحدة
 pipe = setup()
 
-# --- [4] دالة المعالجة لكل طلب جديد ---
+# --- [3] دالة المعالجة لكل طلب جديد ---
 def handler(job):
     job_input = job["input"]
     
-    # جلب البرومبت أو استخدام قيم افتراضية
-    prompt = job_input.get("prompt", "A high-tech futuristic city")
+    prompt = job_input.get("prompt", "A realistic photo of Burj Khalifa")
     negative_prompt = job_input.get("negative_prompt", "(low quality, worst quality:1.2), blurry, distorted")
     
-    print(f"--- [LOG] جاري العمل على برومبت: {prompt} ---")
+    print(f"--- [LOG] جاري رسم: {prompt} ---")
     
     try:
         # توليد الصورة
@@ -53,21 +54,28 @@ def handler(job):
                 guidance_scale=7.5
             ).images[0]
         
-        # حفظ الصورة في المجلد المؤقت الخاص بـ RunPod
-        output_path = "/tmp/output.png"
-        image.save(output_path)
+        # حفظ الصورة مؤقتاً في السيرفر
+        temp_path = "/tmp/output.png"
+        image.save(temp_path)
         
-        print("--- [DONE] تم توليد الصورة بنجاح! ---")
+        # تحويل الصورة إلى Base64
+        with open(temp_path, "rb") as image_file:
+            encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
         
-        # إرجاع النتيجة
+        # حذف الصورة المؤقتة لتوفير المساحة
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+            
+        print("--- [DONE] تم توليد الصورة وتحويلها لـ Base64 بنجاح! ---")
+        
+        # إرجاع النتيجة للمتصفح
         return {
             "status": "success",
-            "message": "Image generated",
-            "image_path": output_path
+            "image_base64": encoded_string
         }
     
     except Exception as e:
-        print(f"❌ خطأ تقني أثناء التوليد: {str(e)}")
+        print(f"❌ خطأ تقني: {str(e)}")
         return {"status": "error", "message": str(e)}
 
 # ربط الكود بـ RunPod
