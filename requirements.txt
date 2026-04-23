@@ -1,9 +1,6 @@
-runpod==1.5.1
-huggingface_hub==0.20.3
---extra-index-url https://download.pytorch.org/whl/cu121
-torch==2.2.1+cu121
-diffusers==0.27.2
+runpod==1.6.2
+diffusers==0.26.3
+torch==2.2.1
 transformers==4.38.2
-accelerate==0.28.0
-
-safetensors==0.4.2
+accelerate==0.27.2
+peft==0.8.2
