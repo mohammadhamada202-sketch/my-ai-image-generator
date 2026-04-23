@@ -1,9 +1,5 @@
 runpod==1.6.2
 diffusers==0.26.3
-huggingface_hub==0.20.3
-torch==2.2.1
 transformers==4.38.2
 accelerate==0.27.2
-peft==0.8.2
-xformers==0.0.24
 googletrans==4.0.0-rc1
