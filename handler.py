@@ -1,82 +1,70 @@
 import runpod
 import torch
-import huggingface_hub
 import base64
 import os
+from googletrans import Translator
 from diffusers import StableDiffusionXLPipeline
 
-# --- [1] حل مشكلة الإصدارات في HuggingFace ---
-if not hasattr(huggingface_hub, "cached_download"):
-    huggingface_hub.cached_download = huggingface_hub.hf_hub_download
+translator = Translator()
 
-# --- [2] دالة إعداد الموديل عند الإقلاع ---
 def setup():
     model_id = "SG161222/RealVisXL_V4.0"
-    print(f"--- [START] جاري تحميل الموديل: {model_id} ---")
-    
-    # تحميل الموديل بإعدادات الذاكرة لكرت 4090
     pipe = StableDiffusionXLPipeline.from_pretrained(
-        model_id, 
-        torch_dtype=torch.float16, 
-        variant="fp16", 
-        use_safetensors=True
+        model_id, torch_dtype=torch.float16, variant="fp16", use_safetensors=True
     ).to("cuda")
-    
-    # محاولة تفعيل xformers لتسريع الأداء
-    try:
-        pipe.enable_xformers_memory_efficient_attention()
-        print("--- [OK] تم تفعيل xformers بنجاح ---")
-    except Exception as e:
-        print(f"--- [INFO] سيتم العمل بدون xformers ---")
-    
-    print("--- [READY] السيرفر جاهز لاستلام الطلبات ---")
     return pipe
 
-# تشغيل الإعداد مرة واحدة
 pipe = setup()
 
-# --- [3] دالة المعالجة لكل طلب جديد ---
 def handler(job):
     job_input = job["input"]
     
-    prompt = job_input.get("prompt", "A realistic photo of Burj Khalifa")
-    negative_prompt = job_input.get("negative_prompt", "(low quality, worst quality:1.2), blurry, distorted")
+    # 1. الترجمة التلقائية وتحسين البرومبت
+    user_prompt = job_input.get("prompt", "")
+    translated = translator.translate(user_prompt, dest='en').text
     
-    print(f"--- [LOG] جاري رسم: {prompt} ---")
+    # 2. إعداد الستايلات (Prompt Engineering)
+    style = job_input.get("style", "realistic")
+    styles_dict = {
+        "realistic": ", photorealistic, 8k uhd, highly detailed, raw photo, master part",
+        "anime": ", anime style, studio ghibli, high quality, vibrant colors",
+        "cartoon": ", digital art, cartoon style, cute, bold lines",
+        "pixar": ", 3d render, pixar style, disney, masterpiece, cgi, high detail"
+    }
+    
+    final_prompt = translated + styles_dict.get(style, styles_dict["realistic"])
+    
+    # 3. إعداد المقاسات
+    aspect_ratio = job_input.get("aspect_ratio", "square")
+    dimensions = {
+        "square": (1024, 1024),
+        "landscape": (1216, 832),
+        "portrait": (832, 1216)
+    }
+    width, height = dimensions.get(aspect_ratio, (1024, 1024))
+    
+    # 4. إعداد الجودة (Steps)
+    quality = job_input.get("quality", "HD")
+    steps = 50 if quality == "4K" else 30 # الـ 4K نزيد فيه خطوات المعالجة لدقة أعلى
     
     try:
-        # توليد الصورة
         with torch.inference_mode():
             image = pipe(
-                prompt=prompt,
-                negative_prompt=negative_prompt,
-                num_inference_steps=30,
+                prompt=final_prompt,
+                width=width,
+                height=height,
+                num_inference_steps=steps,
                 guidance_scale=7.5
             ).images[0]
         
-        # حفظ الصورة مؤقتاً في السيرفر
         temp_path = "/tmp/output.png"
         image.save(temp_path)
         
-        # تحويل الصورة إلى Base64
-        with open(temp_path, "rb") as image_file:
-            encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
-        
-        # حذف الصورة المؤقتة لتوفير المساحة
-        if os.path.exists(temp_path):
-            os.remove(temp_path)
+        with open(temp_path, "rb") as img_f:
+            encoded = base64.b64encode(img_f.read()).decode('utf-8')
             
-        print("--- [DONE] تم توليد الصورة وتحويلها لـ Base64 بنجاح! ---")
-        
-        # إرجاع النتيجة للمتصفح
-        return {
-            "status": "success",
-            "image_base64": encoded_string
-        }
-    
+        return {"status": "success", "image_base64": encoded, "used_prompt": final_prompt}
     except Exception as e:
-        print(f"❌ خطأ تقني: {str(e)}")
         return {"status": "error", "message": str(e)}
 
-# ربط الكود بـ RunPod
 runpod.serverless.start({"handler": handler})
