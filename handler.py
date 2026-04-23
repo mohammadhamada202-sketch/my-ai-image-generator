@@ -51,3 +51,4 @@ def handler(job):
         return {"error": str(e)}
 
 runpod.serverless.start({"handler": handler})
+
