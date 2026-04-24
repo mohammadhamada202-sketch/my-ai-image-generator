@@ -16,18 +16,18 @@ def handler(job):
         aspect_ratio = job_input.get('aspect_ratio', 'square')
         quality = job_input.get('quality', 'HD')
 
-        print(f"--- [START] جاري معالجة الطلب: {prompt} ---")
+        print(f"--- [START] معالجة طلب جديد: {prompt} ---")
 
-        # 1. الترجمة التلقائية
+        # 1. الترجمة التلقائية (من العربي للإنجليزي)
         try:
             detected = translator.detect(prompt)
             if detected.lang != 'en':
                 prompt = translator.translate(prompt, dest='en').text
-                print(f"--- تم الترجمة إلى: {prompt} ---")
+                print(f"--- الترجمة: {prompt} ---")
         except Exception as e:
             print(f"--- فشلت الترجمة، سيتم استخدام النص الأصلي: {str(e)} ---")
 
-        # 2. إضافة لمسة الستايل للوصف
+        # 2. إعدادات الستايل
         style_prompts = {
             "realistic": "extremely detailed, 8k uhd, realistic, masterpiece, professional photography",
             "anime": "anime style, vibrant colors, high resolution, detailed eyes",
@@ -36,27 +36,28 @@ def handler(job):
         }
         full_prompt = f"{prompt}, {style_prompts.get(style, '')}"
 
-        # 3. تحميل الموديل (مع معالجة الأخطاء)
-        print("--- جاري تحميل الموديل من HuggingFace... ---")
+        # 3. تحميل الموديل (من الملفات المحلية التي تم تجميدها)
+        print("--- جاري تحميل الموديل من الذاكرة المحلية... ---")
         pipe = StableDiffusionXLPipeline.from_pretrained(
             "SG161222/RealVisXL_V4.0", 
             torch_dtype=torch.float16, 
             variant="fp16", 
+            local_files_only=True, # لا تحمل من الإنترنت، الموديل موجود مسبقاً
             use_safetensors=True
         ).to("cuda")
         
         pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
-        # تفعيل xformers لتسريع العمل وتقليل استهلاك الذاكرة
-        pipe.enable_xformers_memory_efficient_attention()
+        
+        # تحسين الأداء
+        if torch.cuda.is_available():
+            pipe.enable_xformers_memory_efficient_attention()
 
-        # 4. تحديد المقاسات
+        # 4. المقاسات والجودة
         dims = {"square": (1024, 1024), "landscape": (1216, 832), "portrait": (832, 1216)}
         width, height = dims.get(aspect_ratio, (1024, 1024))
-        
-        # 5. تحديد عدد الخطوات حسب الجودة
         steps = 50 if quality == "4K" else 30
 
-        # 6. توليد الصورة
+        # 5. توليد الصورة
         print(f"--- جاري الرسم الآن (Steps: {steps})... ---")
         image = pipe(
             prompt=full_prompt,
@@ -66,7 +67,7 @@ def handler(job):
             guidance_scale=7.5
         ).images[0]
 
-        # 7. تحويل الصورة إلى Base64
+        # 6. التحويل لـ Base64 ليرسل للموقع
         buffered = BytesIO()
         image.save(buffered, format="PNG")
         img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
@@ -75,7 +76,9 @@ def handler(job):
         return {"image_base64": img_str}
 
     except Exception as e:
-        print(f"--- [CRITICAL ERROR]: {str(e)} ---")
+        error_msg = f"--- [CRITICAL ERROR]: {str(e)} ---"
+        print(error_msg)
         return {"error": str(e)}
 
+# بدء عمل RunPod
 runpod.serverless.start({"handler": handler})
