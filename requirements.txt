@@ -1,6 +1,7 @@
 runpod
-diffusers
-transformers
-accelerate
+diffusers==0.25.0
+transformers==4.38.2
+accelerate==0.27.2
 safetensors
 invisible-watermark
+xformers==0.0.24
