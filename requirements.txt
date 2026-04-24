@@ -2,6 +2,7 @@ runpod
 diffusers==0.25.0
 transformers==4.38.2
 accelerate==0.27.2
+huggingface_hub==0.19.4
 safetensors
 invisible-watermark
 xformers==0.0.24
