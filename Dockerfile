@@ -1,11 +1,6 @@
-FROM runpod/pytorch:2.2.1-py3.10-cuda12.1.1-devel-ubuntu22.04
-
-WORKDIR /workspace
-
-# تحديث pip وتثبيت المكتبات
-COPY requirements.txt .
-RUN pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt
-
-COPY handler.py .
-
-CMD ["python3", "-u", "handler.py"]
+[span_16](start_span)FROM runpod/pytorch:2.1.0-py3.10-cuda11.8.0-devel[span_16](end_span)
+[span_17](start_span)WORKDIR /[span_17](end_span)
+[span_18](start_span)COPY requirements.txt .[span_18](end_span)
+[span_19](start_span)RUN pip install --upgrade pip && pip install -r requirements.txt[span_19](end_span)
+[span_20](start_span)COPY handler.py .[span_20](end_span)
+[span_21](start_span)CMD ["python", "-u", "/handler.py"][span_21](end_span)
