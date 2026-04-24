@@ -4,81 +4,52 @@ from diffusers import StableDiffusionXLPipeline, DPMSolverMultistepScheduler
 from googletrans import Translator
 import base64
 from io import BytesIO
+import os
 
-# إعداد المترجم
 translator = Translator()
+
+# هذا هو المسار داخل الـ Network Volume
+MODEL_CACHE_DIR = "/workspace/models"
 
 def handler(job):
     try:
         job_input = job['input']
         prompt = job_input.get('prompt', '')
         style = job_input.get('style', 'realistic')
-        aspect_ratio = job_input.get('aspect_ratio', 'square')
-        quality = job_input.get('quality', 'HD')
+        
+        print(f"--- [START] جاري العمل على: {prompt} ---")
 
-        print(f"--- [START] معالجة طلب جديد: {prompt} ---")
-
-        # 1. الترجمة التلقائية (من العربي للإنجليزي)
+        # 1. الترجمة
         try:
-            detected = translator.detect(prompt)
-            if detected.lang != 'en':
-                prompt = translator.translate(prompt, dest='en').text
-                print(f"--- الترجمة: {prompt} ---")
-        except Exception as e:
-            print(f"--- فشلت الترجمة، سيتم استخدام النص الأصلي: {str(e)} ---")
+            prompt = translator.translate(prompt, dest='en').text
+        except: pass
 
-        # 2. إعدادات الستايل
-        style_prompts = {
-            "realistic": "extremely detailed, 8k uhd, realistic, masterpiece, professional photography",
-            "anime": "anime style, vibrant colors, high resolution, detailed eyes",
-            "cartoon": "cartoon style, 3d render, cute, bright colors",
-            "pixar": "disney pixar style, 3d animation, highly detailed, cute characters"
-        }
-        full_prompt = f"{prompt}, {style_prompts.get(style, '')}"
-
-        # 3. تحميل الموديل (من الملفات المحلية التي تم تجميدها)
-        print("--- جاري تحميل الموديل من الذاكرة المحلية... ---")
+        # 2. تحميل الموديل (سيتحمل في الـ Volume مرة واحدة فقط)
+        print(f"--- جاري فحص الموديل في {MODEL_CACHE_DIR} ---")
         pipe = StableDiffusionXLPipeline.from_pretrained(
             "SG161222/RealVisXL_V4.0", 
             torch_dtype=torch.float16, 
-            variant="fp16", 
-            local_files_only=True, # لا تحمل من الإنترنت، الموديل موجود مسبقاً
-            use_safetensors=True
+            variant="fp16",
+            use_safetensors=True,
+            cache_dir=MODEL_CACHE_DIR # هنا يتم الحفظ الدائم
         ).to("cuda")
         
         pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
-        
-        # تحسين الأداء
-        if torch.cuda.is_available():
-            pipe.enable_xformers_memory_efficient_attention()
+        pipe.enable_xformers_memory_efficient_attention()
 
-        # 4. المقاسات والجودة
-        dims = {"square": (1024, 1024), "landscape": (1216, 832), "portrait": (832, 1216)}
-        width, height = dims.get(aspect_ratio, (1024, 1024))
-        steps = 50 if quality == "4K" else 30
+        # 3. الرسم
+        print("--- بدأت عملية الرسم... ---")
+        image = pipe(prompt=prompt, num_inference_steps=30).images[0]
 
-        # 5. توليد الصورة
-        print(f"--- جاري الرسم الآن (Steps: {steps})... ---")
-        image = pipe(
-            prompt=full_prompt,
-            num_inference_steps=steps,
-            width=width,
-            height=height,
-            guidance_scale=7.5
-        ).images[0]
-
-        # 6. التحويل لـ Base64 ليرسل للموقع
+        # 4. التشفير
         buffered = BytesIO()
         image.save(buffered, format="PNG")
         img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
 
-        print("--- [DONE] تم توليد الصورة بنجاح! ---")
         return {"image_base64": img_str}
 
     except Exception as e:
-        error_msg = f"--- [CRITICAL ERROR]: {str(e)} ---"
-        print(error_msg)
+        print(f"--- خطأ: {str(e)} ---")
         return {"error": str(e)}
 
-# بدء عمل RunPod
 runpod.serverless.start({"handler": handler})
