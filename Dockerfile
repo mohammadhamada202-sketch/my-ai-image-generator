@@ -1,6 +1,11 @@
-[span_16](start_span)FROM runpod/pytorch:2.1.0-py3.10-cuda11.8.0-devel[span_16](end_span)
-[span_17](start_span)WORKDIR /[span_17](end_span)
-[span_18](start_span)COPY requirements.txt .[span_18](end_span)
-[span_19](start_span)RUN pip install --upgrade pip && pip install -r requirements.txt[span_19](end_span)
-[span_20](start_span)COPY handler.py .[span_20](end_span)
-[span_21](start_span)CMD ["python", "-u", "/handler.py"][span_21](end_span)
+FROM runpod/pytorch:2.1.0-py3.10-cuda11.8.0-devel
+
+WORKDIR /
+
+COPY requirements.txt .
+
+RUN pip install --upgrade pip && pip install -r requirements.txt
+
+COPY handler.py .
+
+CMD ["python", "-u", "/handler.py"]
