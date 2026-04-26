@@ -11,8 +11,8 @@ from diffusers import StableDiffusionXLPipeline, DPMSolverMultistepScheduler
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# تأكد من وضع المفتاح الذي أنشأته من زر "Create API keys" الظاهر في صورتك
-client = OpenAI(api_key="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")
+# عدل السطر الخاص بالمفتاح ليصبح هكذا
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 # تحميل الموديل (SDXL)
 logger.info("Starting Fresh SDXL Pipeline in Romania...")
