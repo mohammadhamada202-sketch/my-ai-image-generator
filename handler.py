@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 # حذفنا os.getenv ووضعنا المفتاح مباشرة لضمان العمل
 # تأكد من وضع مفتاحك الجديد بين علامتي التنصيص
-api_key = "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"
+api_key = "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"
 
 client = OpenAI(api_key=api_key)
 
