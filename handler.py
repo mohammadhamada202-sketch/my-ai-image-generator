@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 # --- إعدادات OpenAI ---
 # تأكد من وضع مفتاحك الجديد هنا
-OPENAI_API_KEY = "sk-proj-xxxxxxxxxxxxxxxxxxxxxxxx" 
+OPENAI_API_KEY = "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" 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
 # ستايلات إضافية لتحسين الجودة
