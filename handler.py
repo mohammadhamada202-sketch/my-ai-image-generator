@@ -10,16 +10,14 @@ from diffusers import StableDiffusionXLPipeline
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# كود يضمن وجود المفتاح حتى لو فشل RunPod في قراءته
+api_key = os.getenv("OPENAI_API_KEY", "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")
 
-# كود ذكي: يبحث عن المفتاح في نظام RunPod، وإذا لم يجده يستخدم المفتاح المكتوب يدوياً
-api_key = os.getenv("OPENAI_API_KEY")
-
-if not api_key:
-    # ضع مفتاحك الجديد هنا بين القوسين (تأكد أنه يبدأ بـ sk-proj-)
-    api_key = "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"
+# التحقق من وجود المفتاح قبل تشغيل العميل
+if not api_key or "sk-proj" not in api_key:
+    raise ValueError("--- [CRITICAL] OpenAI API Key is missing or invalid! ---")
 
 client = OpenAI(api_key=api_key)
-
 # تعريف الكليينت
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
