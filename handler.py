@@ -3,97 +3,80 @@ import torch
 import runpod
 import base64
 import logging
-from io import BytesIO
+import io
 from openai import OpenAI
 from diffusers import StableDiffusionXLPipeline, DPMSolverMultistepScheduler
 
-# 1. إعدادات النظام والسجلات
+# 1. إعدادات النظام والسجلات (ضرورية لمراقبة المشكلة)
 os.environ["NUMPY_EXPERIMENTAL_ARRAY_FUNCTION"] = "0"
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# 2. إعداد OpenAI (تأكد من وضع مفتاحك هنا)
-client = OpenAI(api_key="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")
+# 2. إعداد OpenAI (تأكد من وضع المفتاح الصحيح هنا)
+# تأكد أن الحساب فيه رصيد (Credits) كافٍ
+OPENAI_CLIENT = OpenAI(api_key="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")
 
-# 3. تحميل موديل الصور (SDXL) - يتم التحميل مرة واحدة عند تشغيل الحاوية
+# 3. تحميل الموديل (يتم مرة واحدة عند الإقلاع)
 logger.info("Loading SDXL Pipeline...")
 pipe = StableDiffusionXLPipeline.from_pretrained(
     "SG161222/RealVisXL_V4.0",
     torch_dtype=torch.float16,
     variant="fp16"
 ).to("cuda")
-
-# استخدام محرك سرعة لتحسين الأداء
 pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
 
-# قاموس الستايلات
-STYLE_MAP = {
-    "realistic": "photorealistic, 8k, raw photo, masterpiece",
-    "cinematic": "cinematic movie still, moody lighting, epic composition",
-    "anime": "anime style art, vibrant colors, studio ghibli aesthetic",
-    "cartoon": "3d cartoon disney style, vibrant, cute",
-    "pixar": "high-end 3d render, pixar movie aesthetics, soft lighting"
-}
+def translate_via_openai(user_text):
+    """ هذه الدالة المسؤولة عن التواصل مع OpenAI """
+    try:
+        logger.info(f"--- ATTEMPTING OPENAI CONNECTION FOR: {user_text} ---")
+        
+        response = OPENAI_CLIENT.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system", 
+                    "content": "Translate the user input to English and expand it into a detailed visual prompt for SDXL. Return ONLY the English text."
+                },
+                {"role": "user", "content": user_text}
+            ],
+            timeout=15 # وقت انتظار لضمان عدم تعليق السيرفر
+        )
+        
+        translated_text = response.choices[0].message.content.strip()
+        logger.info(f"--- OPENAI SUCCESS: {translated_text} ---")
+        return translated_text
+        
+    except Exception as e:
+        logger.error(f"--- OPENAI FAILED: {str(e)} ---")
+        return user_text # في حال الفشل نستخدم النص الأصلي كأمان
 
 def handler(job):
-    """
-    الدالة الرئيسية التي تستقبل الطلبات من الموقع
-    """
     try:
         job_input = job['input']
-        user_prompt = job_input.get('prompt', '')
-        style = job_input.get('style', 'realistic')
-        width = job_input.get('width', 1024)
-        height = job_input.get('height', 1024)
-
-        # --- المرحلة الأولى: OpenAI (الترجمة والتحسين) ---
-        # إرسال إشارة للموقع بأننا بدأنا التواصل مع OpenAI
-        runpod.serverless.progress(job, "OPENAI_PROCESSING")
-        logger.info(f"Connecting to OpenAI for prompt: {user_prompt}")
-
-        try:
-            response = client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {
-                        "role": "system", 
-                        "content": "Translate to English and expand into a professional SDXL visual prompt. Return only the English text."
-                    },
-                    {"role": "user", "content": user_prompt}
-                ],
-                timeout=15
-            )
-            final_prompt = response.choices[0].message.content.strip()
-            logger.info(f"OpenAI Result: {final_prompt}")
-        except Exception as e:
-            logger.error(f"OpenAI Error: {e}")
-            final_prompt = user_prompt # العودة للأصل في حال فشل OpenAI
-
-        # --- المرحلة الثانية: محرك الصور (الرسم) ---
-        # إرسال إشارة للموقع بأننا انتهينا من الترجمة وبدأنا الرسم الفعلي
-        runpod.serverless.progress(job, "DRAWING_PROCESSING")
+        prompt = job_input.get('prompt', '')
         
-        full_prompt = f"{final_prompt}, {STYLE_MAP.get(style, '')}"
-        logger.info(f"Rendering image with: {full_prompt}")
-
+        # استدعاء دالة الترجمة (هنا يتم التواصل مع OpenAI)
+        final_prompt = translate_via_openai(prompt)
+        
+        # عملية الرسم باستخدام النص المترجم
+        logger.info("--- STARTING SDXL RENDERING ---")
         with torch.inference_mode():
             image = pipe(
-                prompt=full_prompt,
+                prompt=final_prompt,
                 num_inference_steps=30,
-                width=width,
-                height=height,
-                guidance_scale=7.5
+                width=job_input.get('width', 1024),
+                height=job_input.get('height', 1024)
             ).images[0]
 
-        # --- المرحلة الثالثة: تحويل الصورة وإرسالها ---
-        buffered = BytesIO()
+        # تحويل الصورة إلى Base64
+        buffered = io.BytesIO()
         image.save(buffered, format="PNG")
-        image_base64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
+        img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
 
-        return {"image_base64": image_base64}
+        return {"image_base64": img_str}
 
     except Exception as e:
-        logger.error(f"Handler Error: {e}")
+        logger.error(f"--- HANDLER ERROR: {str(e)} ---")
         return {"error": str(e)}
 
 # تشغيل خادم RunPod
