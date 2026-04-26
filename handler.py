@@ -25,7 +25,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # 2. إعداد OpenAI (تأكد من وضع المفتاح هنا)
-client = OpenAI(api_key="sk-proj-xxxxxxxxxxxxxxxxxxxxxxxx")
+client = OpenAI(api_key="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")
 
 # 3. تحميل الموديل (SDXL)
 logger.info("Loading Fresh SDXL Pipeline...")
