@@ -4,30 +4,19 @@ import runpod
 import base64
 import logging
 import io
-import gc  # مكتبة جمع القمامة البرمجية لتنظيف الذاكرة
-
-# 1. تنظيف الذاكرة المؤقتة فور تشغيل الكود
-def clear_system_cache():
-    # مسح أي ملفات قديمة مخزنة في الذاكرة العشوائية (RAM) أو كرت الشاشة (GPU)
-    torch.cuda.empty_cache()
-    gc.collect()
-    print("--- SYSTEM CACHE CLEARED: Ready for Fresh Connection ---")
-
-# استدعاء التنظيف فور إقلاع السيرفر
-clear_system_cache()
-
+import gc
 from openai import OpenAI
 from diffusers import StableDiffusionXLPipeline, DPMSolverMultistepScheduler
 
-# إعداد السجلات
+# إعدادات الاستقرار
 os.environ["NUMPY_EXPERIMENTAL_ARRAY_FUNCTION"] = "0"
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# 2. إعداد OpenAI (تأكد من وضع المفتاح هنا)
+# --- ضع مفتاحك هنا ---
 client = OpenAI(api_key="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")
 
-# 3. تحميل الموديل (SDXL)
+# تحميل الموديل (SDXL)
 logger.info("Loading Fresh SDXL Pipeline...")
 pipe = StableDiffusionXLPipeline.from_pretrained(
     "SG161222/RealVisXL_V4.0",
@@ -37,33 +26,34 @@ pipe = StableDiffusionXLPipeline.from_pretrained(
 pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
 
 def translate_and_enhance(prompt):
-    """ التواصل المباشر مع OpenAI لضمان الترجمة """
+    """ دالة التواصل مع OpenAI مع نظام كشف أعطال """
     try:
-        logger.info(f"--- TRIGGERING OPENAI FOR: {prompt} ---")
+        logger.info(f"--- [DEBUG] CALLING OPENAI FOR: {prompt} ---")
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "Translate to English and enhance the prompt for SDXL. Return ONLY the English text."},
+                {"role": "system", "content": "Translate to English and enhance as a professional SDXL prompt. Return only the result."},
                 {"role": "user", "content": prompt}
             ],
             timeout=15
         )
-        result = response.choices[0].message.content.strip()
-        logger.info(f"--- OPENAI RESPONSE RECEIVED: {result} ---")
-        return result
+        res = response.choices[0].message.content.strip()
+        logger.info(f"--- [DEBUG] OPENAI SUCCESS: {res} ---")
+        return res
     except Exception as e:
-        logger.error(f"--- OPENAI CONNECTION FAILED: {str(e)} ---")
+        # هذا السطر سيكشف لك في الـ Logs سبب فشل الـ 5 دولار
+        logger.error(f"--- [CRITICAL] OPENAI FAILED! REASON: {str(e)} ---")
         return prompt
 
 def handler(job):
-    # تنظيف الذاكرة قبل كل عملية رسم جديدة لضمان عدم وجود تداخل
     torch.cuda.empty_cache()
+    gc.collect()
     
     try:
         job_input = job['input']
         user_prompt = job_input.get('prompt', '')
         
-        # تنفيذ الترجمة الإجبارية عبر OpenAI
+        # تنفيذ الترجمة
         final_prompt = translate_and_enhance(user_prompt)
         
         with torch.inference_mode():
@@ -74,10 +64,11 @@ def handler(job):
                 height=job_input.get('height', 1024)
             ).images[0]
 
-        buffered = io.BytesIO()
-        image.save(buffered, format="PNG")
-        return {"image_base64": base64.b64encode(buffered.getvalue()).decode("utf-8")}
+        buf = io.BytesIO()
+        image.save(buf, format="PNG")
+        img_str = base64.b64encode(buf.getvalue()).decode("utf-8")
         
+        return {"image_base64": img_str}
     except Exception as e:
         logger.error(f"Handler Error: {str(e)}")
         return {"error": str(e)}
