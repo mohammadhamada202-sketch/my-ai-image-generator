@@ -5,60 +5,52 @@ import base64
 import logging
 import io
 from openai import OpenAI
-from diffusers import StableDiffusionXLPipeline, DPMSolverMultistepScheduler
+from diffusers import StableDiffusionXLPipeline
 
-# إعداد السجلات لمراقبة العملية
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-import os
-# ... باقي المكتبات
-# قراءة المفتاح من بيئة العمل (RunPod Environment Variables)
-# هيك الكود بكون آمن وما حدا بيقدر يشوف مفتاحك
+# وظيفة للتأكد من المفتاح المستخدم بدون كشفه بالكامل
+def check_key():
+    key = os.getenv("OPENAI_API_KEY", "")
+    if key:
+        # سيطبع أول 6 وأخر 4 أحرف فقط للتأكد
+        logger.info(f"--- [KEY CHECK] Using Key: {key[:6]}...{key[-4:]} ---")
+    else:
+        logger.error("--- [KEY CHECK] NO KEY FOUND IN ENVIRONMENT! ---")
+
+# تعريف الكليينت
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-# تحميل الموديل (SDXL)
 logger.info("Starting Fresh SDXL Pipeline in Romania...")
 pipe = StableDiffusionXLPipeline.from_pretrained(
     "SG161222/RealVisXL_V4.0", 
     torch_dtype=torch.float16,
     variant="fp16"
 ).to("cuda")
-pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
 
 def handler(job):
+    # فحص المفتاح عند كل طلب للتأكد
+    check_key()
+    
     job_input = job['input']
     user_prompt = job_input.get('prompt', '')
     
-    # --- محاولة التواصل مع OpenAI ---
-    logger.info(f"--- Calling OpenAI API for prompt: {user_prompt} ---")
     try:
-        # ملاحظة: استخدمنا نموذج gpt-4o-mini لأنه الأسرع والأرخص
         response = client.chat.completions.create(
             model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": "Translate to English and enhance as a professional SDXL prompt. Return only the English text."},
-                {"role": "user", "content": user_prompt}
-            ],
+            messages=[{"role": "user", "content": f"Enhance this prompt: {user_prompt}"}],
             timeout=15
         )
         final_prompt = response.choices[0].message.content.strip()
-        logger.info(f"--- OpenAI Successfully Answered: {final_prompt} ---")
+        logger.info(f"--- OPENAI SUCCESS: {final_prompt} ---")
     except Exception as e:
-        # إذا ظهر هذا السطر في الـ Logs، انسخ الخطأ لي فوراً
-        logger.error(f"--- OpenAI Connection Failed: {str(e)} ---")
+        logger.error(f"--- OPENAI FAILED: {str(e)} ---")
         final_prompt = user_prompt
 
-    # --- عملية الرسم ---
     with torch.inference_mode():
-        image = pipe(
-            prompt=final_prompt,
-            num_inference_steps=30,
-            width=job_input.get('width', 1024),
-            height=job_input.get('height', 1024)
-        ).images[0]
+        image = pipe(prompt=final_prompt, num_inference_steps=30).images[0]
 
-    # تحويل الصورة إلى Base64
     buf = io.BytesIO()
     image.save(buf, format="PNG")
     return {"image_base64": base64.b64encode(buf.getvalue()).decode("utf-8")}
