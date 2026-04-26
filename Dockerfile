@@ -3,18 +3,21 @@ FROM runpod/pytorch:2.1.0-py3.10-cuda11.8.0-devel
 
 WORKDIR /
 
-# 1. مسح أي نسخ قديمة قد تكون موجودة مسبقاً في الصورة الأساسية
-RUN pip uninstall -y transformers huggingface-hub accelerate diffusers
+# 1. تنظيف شامل لأي مخلفات قديمة
+RUN pip uninstall -y transformers huggingface-hub accelerate diffusers numpy
 
-# 2. تثبيت الحزمة المتوافقة "الذهبية" (هذه النسخ تعمل مع بعضها بدون أخطاء Shards)
+# 2. تثبيت numpy أولاً بشكل منفصل لضمان توفره للمكتبات الأخرى
 RUN pip install --upgrade pip && \
-    pip install --no-cache-dir \
+    pip install --no-cache-dir numpy==1.24.3
+
+# 3. تثبيت الحزمة المتوافقة "الذهبية" (إصدارات مترابطة برمجياً)
+RUN pip install --no-cache-dir \
     huggingface-hub==0.23.2 \
     transformers==4.40.0 \
     accelerate==0.30.0 \
     diffusers==0.27.2
 
-# 3. تثبيت بقية المكتبات التقنية للمشروع
+# 4. تثبيت المكتبات التقنية المتبقية
 RUN pip install --no-cache-dir \
     runpod \
     xformers==0.0.22.post7 \
@@ -22,7 +25,7 @@ RUN pip install --no-cache-dir \
     pillow \
     openai
 
-# نسخ الملفات (تأكد أن الأسماء مطابقة تماماً لما في جهازك)
+# نسخ الملفات
 COPY handler.py .
 COPY video_engine.py .
 
