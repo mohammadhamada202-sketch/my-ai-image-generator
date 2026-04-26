@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 # --- إعدادات الوصول ---
 # ضع مفتاح OpenAI الخاص بك هنا
-OPENAI_API_KEY = "sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" 
+OPENAI_API_KEY = "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" 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
 # مسار تخزين الموديلات في الفوليوم لضمان السرعة
