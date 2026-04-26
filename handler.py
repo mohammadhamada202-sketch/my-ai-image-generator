@@ -11,8 +11,13 @@ from diffusers import StableDiffusionXLPipeline, DPMSolverMultistepScheduler
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# عدل السطر الخاص بالمفتاح ليصبح هكذا
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+import os
+# ... باقي المكتبات
+
+# يحاول الكود قراءة المفتاح من RunPod، وإذا لم يجده يستخدم المفتاح المكتوب (مؤقتاً)
+api_key = os.getenv("OPENAI_API_KEY", "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")
+
+client = OpenAI(api_key=api_key)
 
 # تحميل الموديل (SDXL)
 logger.info("Starting Fresh SDXL Pipeline in Romania...")
