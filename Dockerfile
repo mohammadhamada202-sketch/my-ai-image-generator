@@ -9,6 +9,7 @@ RUN pip uninstall -y numpy xformers
 RUN pip install --upgrade pip && \
     pip install --no-cache-dir "numpy<2"
 
+
 # 3. تثبيت المكتبات الأساسية (النسخة الذهبية المستقرة)
 RUN pip install --no-cache-dir \
     huggingface-hub==0.23.2 \
