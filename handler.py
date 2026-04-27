@@ -1,163 +1,99 @@
 import runpod
 import torch
 import base64
-from io import BytesIO
 import os
+from io import BytesIO
+from openai import OpenAI  # تأكد من إضافة openai في requirements.txt
 from diffusers import StableDiffusionXLPipeline, DPMSolverMultistepScheduler
-from openai import OpenAI
 
-# المسار الخاص بالـ Network Volume لتخزين الموديل
+# إعدادات الموديل والمسار
+MODEL_CACHE_DIR = "/workspace/models"
 
-MODEL_CACHE_DIR = “/workspace/models”
+# 1. جلب مفتاح OpenAI من إعدادات RunPod
+# تأكد انك سميت المتغير في RunPod باسم OPENAI_API_KEY
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-# قاموس الستايلات الفنية المدعومة
-
-STYLE_MODIFIERS = {
-“realistic”: “photorealistic, 8k uhd, raw photo, ultra-detailed, highly professional, masterpiece”,
-“anime”: “anime style, studio ghibli, vibrant colors, detailed lineart, high resolution”,
-“cinematic”: “cinematic lighting, dramatic shadows, movie still, 35mm lens, sharp focus”,
-“cartoon”: “cartoon style, 2d animation, clean lines, bold colors, playful design”,
-“pixar”: “pixar animation style, 3d render, disney style, cute character, subsurface scattering, 4k”
-}
-
-NEGATIVE_PROMPT = (
-“low quality, blurry, distorted, low resolution, “
-“bad hands, deformed faces, extra fingers, watermark, “
-“text, signature, cropped, out of frame, worst quality”
-)
-
-# ──────────────────────────────────────────
-
-# تحميل الموديل مرة وحدة عند بدء السيرفر
-
-# ──────────────────────────────────────────
-
-pipe = StableDiffusionXLPipeline.from_pretrained(
-“SG161222/RealVisXL_V4.0”,
-torch_dtype=torch.float16,
-variant=“fp16”,
-cache_dir=MODEL_CACHE_DIR
-).to(“cuda”)
-
-pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
-
-try:
-pipe.enable_xformers_memory_efficient_attention()
-except:
-pass
-
-# ──────────────────────────────────────────
-
-# دوال الترجمة والـ Enhance
-
-# ──────────────────────────────────────────
-
-def is_english(text):
-ascii_count = sum(1 for c in text if ord(c) < 128)
-return (ascii_count / max(len(text), 1)) > 0.85
-
-def translate_to_english(client, text):
-response = client.chat.completions.create(
-model=“gpt-4o”,
-messages=[
-{
-“role”: “system”,
-“content”: “You are a professional translator. Translate the user’s text to English. Return ONLY the translated text, nothing else.”
-},
-{“role”: “user”, “content”: text}
-],
-temperature=0.3,
-max_tokens=500,
-)
-return response.choices[0].message.content.strip()
-
-def enhance_prompt(client, prompt, style):
-response = client.chat.completions.create(
-model=“gpt-4o”,
-messages=[
-{
-“role”: “system”,
-“content”: (
-“You are an expert AI image prompt engineer specializing in Stable Diffusion XL. “
-“Your job is to take a simple image description and expand it into a highly detailed, “
-“professional prompt that will generate stunning, high-quality images. “
-f”The target style is: {style}. “
-“Focus on: lighting, composition, mood, colors, textures, camera angle, and artistic quality. “
-“Return ONLY the enhanced prompt text, no explanations, no bullet points.”
-)
-},
-{“role”: “user”, “content”: f”Enhance this image prompt: {prompt}”}
-],
-temperature=0.7,
-max_tokens=300,
-)
-return response.choices[0].message.content.strip()
-
-def prepare_prompt(raw_prompt, style):
-client = OpenAI(api_key=os.environ.get(“OPENAI_API_KEY”))
-
-```
-translated = raw_prompt if is_english(raw_prompt) else translate_to_english(client, raw_prompt)
-enhanced   = enhance_prompt(client, translated, style)
-
-return {"original": raw_prompt, "translated": translated, "enhanced": enhanced}
-```
-
-# ──────────────────────────────────────────
-
-# الـ Handler الرئيسي
-
-# ──────────────────────────────────────────
+def enhance_prompt_with_gpt(user_input):
+    """
+    وظيفة لترجمة وتحسين البرومبت باستخدام GPT
+    """
+    system_prompt = (
+        "You are a professional AI image prompt engineer. "
+        "If the input is in Arabic, translate it to English. "
+        "Then, enhance the prompt to be highly detailed for a realistic AI image generator. "
+        "Add details about lighting, camera settings (8k, raw photo), and environment. "
+        "Keep the core idea of the user but make it professional. "
+        "Return ONLY the enhanced English prompt."
+    )
+    
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini", # أو gpt-3.5-turbo حسب ميزانيتك
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_input}
+            ],
+            max_tokens=150
+        )
+        enhanced_text = response.choices[0].message.content.strip()
+        return enhanced_text
+    except Exception as e:
+        print(f"GPT Error: {e}")
+        return user_input # في حال فشل OpenAI نستخدم النص الأصلي
 
 def handler(job):
-try:
-job_input = job[‘input’]
+    try:
+        job_input = job['input']
+        raw_prompt = job_input.get('prompt', '')
+        style = job_input.get('style', 'realistic')
+        width = job_input.get('width', 1024)
+        height = job_input.get('height', 1024)
 
-```
-    user_prompt = job_input.get('prompt', '')
-    style       = job_input.get('style', 'realistic')
-    width       = job_input.get('width', 1024)
-    height      = job_input.get('height', 1024)
+        if not raw_prompt:
+            return {"error": "No prompt provided"}
 
-    if not user_prompt:
-        return {"error": "البرومبت فاضي"}
+        # 2. تحسين البرومبت وترجمته عبر OpenAI
+        print(f"Original Prompt: {raw_prompt}")
+        final_enhanced_prompt = enhance_prompt_with_gpt(raw_prompt)
+        print(f"Enhanced Prompt: {final_enhanced_prompt}")
 
-    # ترجمة + Enhance
-    prompt_data     = prepare_prompt(user_prompt, style)
-    enhanced_prompt = prompt_data["enhanced"]
+        # 3. تحميل الموديل وتوليد الصورة
+        pipe = StableDiffusionXLPipeline.from_pretrained(
+            "SG161222/RealVisXL_V4.0", 
+            torch_dtype=torch.float16, 
+            variant="fp16",
+            cache_dir=MODEL_CACHE_DIR
+        ).to("cuda")
+        
+        pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
+        
+        # تفعيل تحسينات الذاكرة
+        try:
+            pipe.enable_xformers_memory_efficient_attention()
+        except:
+            pass
 
-    # إضافة الستايل modifier
-    modifier    = STYLE_MODIFIERS.get(style, STYLE_MODIFIERS["realistic"])
-    full_prompt = f"{enhanced_prompt}, {modifier}"
+        # توليد الصورة بالبرومبت "المحسن"
+        image = pipe(
+            prompt=final_enhanced_prompt,
+            negative_prompt="low quality, blurry, distorted, extra fingers, bad anatomy, text, watermark",
+            num_inference_steps=35,
+            guidance_scale=7.5,
+            width=width,
+            height=height
+        ).images[0]
 
-    # توليد الصورة
-    image = pipe(
-        prompt=full_prompt,
-        negative_prompt=NEGATIVE_PROMPT,
-        num_inference_steps=35,
-        guidance_scale=7.5,
-        width=width,
-        height=height
-    ).images[0]
+        # تحويل النتيجة لـ Base64
+        buffered = BytesIO()
+        image.save(buffered, format="PNG")
+        img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
 
-    # تحويل الصورة إلى Base64
-    buffered = BytesIO()
-    image.save(buffered, format="PNG")
-    img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
-
-    return {
-        "image_base64": img_str,
-        "prompt_info": {
-            "original":   prompt_data["original"],
-            "translated": prompt_data["translated"],
-            "enhanced":   prompt_data["enhanced"],
+        return {
+            "image_base64": img_str,
+            "used_prompt": final_enhanced_prompt # نرسل البرومبت الجديد للموقع إذا أحببت عرضه
         }
-    }
 
-except Exception as e:
-    return {"error": str(e)}
-```
+    except Exception as e:
+        return {"error": str(e)}
 
-# بدء تشغيل السيرفر
-
-runpod.serverless.start({“handler”: handler})
+runpod.serverless.start({"handler": handler})
