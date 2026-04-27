@@ -1,30 +1,23 @@
-# ============================================================
+import runpod
+import torch
+import base64
+from io import BytesIO
+import os
+from diffusers import StableDiffusionXLPipeline, DPMSolverMultistepScheduler
+from openai import OpenAI
 
-# styles.py
+# المسار الخاص بالـ Network Volume لتخزين الموديل
 
-# ============================================================
+MODEL_CACHE_DIR = “/workspace/models”
+
+# قاموس الستايلات الفنية المدعومة
 
 STYLE_MODIFIERS = {
-“realistic”: (
-“photorealistic, 8k uhd, raw photo, ultra-detailed, “
-“highly professional, masterpiece, sharp focus, natural lighting”
-),
-“anime”: (
-“anime style, studio ghibli, vibrant colors, “
-“detailed lineart, high resolution, cel shading”
-),
-“cinematic”: (
-“cinematic lighting, dramatic shadows, movie still, “
-“35mm lens, sharp focus, anamorphic lens, film grain”
-),
-“cartoon”: (
-“cartoon style, 2d animation, clean lines, “
-“bold colors, playful design, flat shading”
-),
-“pixar”: (
-“pixar animation style, 3d render, disney style, “
-“cute character, subsurface scattering, 4k, volumetric lighting”
-),
+“realistic”: “photorealistic, 8k uhd, raw photo, ultra-detailed, highly professional, masterpiece”,
+“anime”: “anime style, studio ghibli, vibrant colors, detailed lineart, high resolution”,
+“cinematic”: “cinematic lighting, dramatic shadows, movie still, 35mm lens, sharp focus”,
+“cartoon”: “cartoon style, 2d animation, clean lines, bold colors, playful design”,
+“pixar”: “pixar animation style, 3d render, disney style, cute character, subsurface scattering, 4k”
 }
 
 NEGATIVE_PROMPT = (
@@ -33,83 +26,52 @@ NEGATIVE_PROMPT = (
 “text, signature, cropped, out of frame, worst quality”
 )
 
-# ============================================================
+# ──────────────────────────────────────────
 
-# model_loader.py
+# تحميل الموديل مرة وحدة عند بدء السيرفر
 
-# ============================================================
+# ──────────────────────────────────────────
 
-import torch
-from diffusers import StableDiffusionXLPipeline, DPMSolverMultistepScheduler
-
-MODEL_ID = “SG161222/RealVisXL_V4.0”
-MODEL_CACHE_DIR = “/workspace/models”
-
-def load_pipeline() -> StableDiffusionXLPipeline:
 pipe = StableDiffusionXLPipeline.from_pretrained(
-MODEL_ID,
+“SG161222/RealVisXL_V4.0”,
 torch_dtype=torch.float16,
 variant=“fp16”,
-cache_dir=MODEL_CACHE_DIR,
-use_safetensors=True,
+cache_dir=MODEL_CACHE_DIR
 ).to(“cuda”)
 
-```
-pipe.scheduler = DPMSolverMultistepScheduler.from_config(
-    pipe.scheduler.config,
-    use_karras_sigmas=True,
-    algorithm_type="dpmsolver++",
-)
+pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
 
 try:
-    pipe.enable_xformers_memory_efficient_attention()
-except Exception:
-    pass
+pipe.enable_xformers_memory_efficient_attention()
+except:
+pass
 
-pipe.enable_attention_slicing()
+# ──────────────────────────────────────────
 
-return pipe
-```
+# دوال الترجمة والـ Enhance
 
-# ============================================================
+# ──────────────────────────────────────────
 
-# prompt_engine.py
-
-# ============================================================
-
-import os
-from openai import OpenAI
-
-def get_openai_client() -> OpenAI:
-api_key = os.environ.get(“OPENAI_API_KEY”)
-if not api_key:
-raise ValueError(“OPENAI_API_KEY غير موجود في متغيرات البيئة”)
-return OpenAI(api_key=api_key)
-
-def is_english(text: str) -> bool:
+def is_english(text):
 ascii_count = sum(1 for c in text if ord(c) < 128)
 return (ascii_count / max(len(text), 1)) > 0.85
 
-def translate_to_english(client: OpenAI, text: str) -> str:
+def translate_to_english(client, text):
 response = client.chat.completions.create(
 model=“gpt-4o”,
 messages=[
 {
 “role”: “system”,
-“content”: (
-“You are a professional translator. “
-“Translate the user’s text to English. “
-“Return ONLY the translated text, nothing else.”
-),
+“content”: “You are a professional translator. Translate the user’s text to English. Return ONLY the translated text, nothing else.”
 },
-{“role”: “user”, “content”: text},
+{“role”: “user”, “content”: text}
 ],
 temperature=0.3,
 max_tokens=500,
 )
 return response.choices[0].message.content.strip()
 
-def enhance_prompt(client: OpenAI, prompt: str, style: str) -> str:
+def enhance_prompt(client, prompt, style):
 response = client.chat.completions.create(
 model=“gpt-4o”,
 messages=[
@@ -122,135 +84,80 @@ messages=[
 f”The target style is: {style}. “
 “Focus on: lighting, composition, mood, colors, textures, camera angle, and artistic quality. “
 “Return ONLY the enhanced prompt text, no explanations, no bullet points.”
-),
+)
 },
-{
-“role”: “user”,
-“content”: f”Enhance this image prompt: {prompt}”,
-},
+{“role”: “user”, “content”: f”Enhance this image prompt: {prompt}”}
 ],
 temperature=0.7,
 max_tokens=300,
 )
 return response.choices[0].message.content.strip()
 
-def prepare_prompt(raw_prompt: str, style: str) -> dict:
-client = get_openai_client()
+def prepare_prompt(raw_prompt, style):
+client = OpenAI(api_key=os.environ.get(“OPENAI_API_KEY”))
 
 ```
-if is_english(raw_prompt):
-    translated = raw_prompt
-else:
-    translated = translate_to_english(client, raw_prompt)
+translated = raw_prompt if is_english(raw_prompt) else translate_to_english(client, raw_prompt)
+enhanced   = enhance_prompt(client, translated, style)
 
-enhanced = enhance_prompt(client, translated, style)
-
-return {
-    "original": raw_prompt,
-    "translated": translated,
-    "enhanced": enhanced,
-}
+return {"original": raw_prompt, "translated": translated, "enhanced": enhanced}
 ```
 
-# ============================================================
+# ──────────────────────────────────────────
 
-# image_utils.py
+# الـ Handler الرئيسي
 
-# ============================================================
+# ──────────────────────────────────────────
 
-import base64
-from io import BytesIO
-from PIL import Image
-
-def generate_image(
-pipe,
-enhanced_prompt: str,
-style: str,
-width: int = 1024,
-height: int = 1024,
-steps: int = 35,
-guidance_scale: float = 7.5,
-seed: int = None,
-) -> Image.Image:
-modifier = STYLE_MODIFIERS.get(style, STYLE_MODIFIERS[“realistic”])
-full_prompt = f”{enhanced_prompt}, {modifier}”
-
-```
-generator = None
-if seed is not None:
-    generator = torch.Generator("cuda").manual_seed(seed)
-
-result = pipe(
-    prompt=full_prompt,
-    negative_prompt=NEGATIVE_PROMPT,
-    num_inference_steps=steps,
-    guidance_scale=guidance_scale,
-    width=width,
-    height=height,
-    generator=generator,
-)
-
-return result.images[0]
-```
-
-def image_to_base64(image: Image.Image, fmt: str = “PNG”) -> str:
-buffered = BytesIO()
-image.save(buffered, format=fmt)
-return base64.b64encode(buffered.getvalue()).decode(“utf-8”)
-
-# ============================================================
-
-# handler.py
-
-# ============================================================
-
-import runpod
-
-pipe = load_pipeline()
-
-def handler(job: dict) -> dict:
+def handler(job):
 try:
-job_input = job.get(“input”, {})
+job_input = job[‘input’]
 
 ```
-    raw_prompt     = job_input.get("prompt", "")
-    style          = job_input.get("style", "realistic")
-    width          = int(job_input.get("width", 1024))
-    height         = int(job_input.get("height", 1024))
-    steps          = int(job_input.get("steps", 35))
-    guidance_scale = float(job_input.get("guidance_scale", 7.5))
-    seed           = job_input.get("seed", None)
+    user_prompt = job_input.get('prompt', '')
+    style       = job_input.get('style', 'realistic')
+    width       = job_input.get('width', 1024)
+    height      = job_input.get('height', 1024)
 
-    if not raw_prompt:
-        return {"error": "البرومبت فاضي، أرسل prompt في الـ input"}
+    if not user_prompt:
+        return {"error": "البرومبت فاضي"}
 
-    prompt_data     = prepare_prompt(raw_prompt, style)
+    # ترجمة + Enhance
+    prompt_data     = prepare_prompt(user_prompt, style)
     enhanced_prompt = prompt_data["enhanced"]
 
-    image = generate_image(
-        pipe=pipe,
-        enhanced_prompt=enhanced_prompt,
-        style=style,
-        width=width,
-        height=height,
-        steps=steps,
-        guidance_scale=guidance_scale,
-        seed=seed,
-    )
+    # إضافة الستايل modifier
+    modifier    = STYLE_MODIFIERS.get(style, STYLE_MODIFIERS["realistic"])
+    full_prompt = f"{enhanced_prompt}, {modifier}"
 
-    img_base64 = image_to_base64(image)
+    # توليد الصورة
+    image = pipe(
+        prompt=full_prompt,
+        negative_prompt=NEGATIVE_PROMPT,
+        num_inference_steps=35,
+        guidance_scale=7.5,
+        width=width,
+        height=height
+    ).images[0]
+
+    # تحويل الصورة إلى Base64
+    buffered = BytesIO()
+    image.save(buffered, format="PNG")
+    img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
 
     return {
-        "image_base64": img_base64,
+        "image_base64": img_str,
         "prompt_info": {
             "original":   prompt_data["original"],
             "translated": prompt_data["translated"],
             "enhanced":   prompt_data["enhanced"],
-        },
+        }
     }
 
 except Exception as e:
     return {"error": str(e)}
 ```
+
+# بدء تشغيل السيرفر
 
 runpod.serverless.start({“handler”: handler})
