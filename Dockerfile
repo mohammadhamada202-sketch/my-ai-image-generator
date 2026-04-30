@@ -22,7 +22,6 @@ RUN pip install --no-cache-dir \
 RUN pip install --no-cache-dir xformers==0.0.22.post7 --index-url https://download.pytorch.org/whl/cu118
 
 # 5. نسخ جميع ملفات المشروع الجديدة (تأكد أن الأسماء تطابق ملفاتك في GitHub)
-COPY __init__.py .
 COPY handler.py .
 COPY styles_config.py .
 COPY dimensions_helper.py .
