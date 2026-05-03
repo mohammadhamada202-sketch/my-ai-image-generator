@@ -5,7 +5,7 @@ STYLE_PROMPTS = {
     "photorealistic": "hyper-realistic portrait, 8k raw photo, masterwork, cinematic lighting, sharp focus, ultra-detailed skin texture, professional photography",
     
     # 2. الأنمي (مطابق لـ Anime Style في الصورة)
-    "anime": "high-quality anime style, vibrant colors, clean artistic lines, studio ghibli aesthetic, detailed eyes, masterpiece illustration",
+     "anime": "professional anime style portrait, masterpiece, high-quality digital illustration, smooth skin, expressive eyes, vibrant colors"
     
     # 3. التجسيم ثلاثي الأبعاد (مطابق لـ 3D Render في الصورة)
     "3d_render": "modern 3d character render, unreal engine 5 style, octane render, smooth textures, subsurface scattering, pixar-like lighting, high-end digital art",
