@@ -2,8 +2,8 @@
 
 AVATAR_STYLES = {
     # 📸 Photorealistic
-    "photorealistic": "hyper-realistic 8k studio portrait of the person, cinematic lighting, ultra-detailed skin and eyes, masterfully rendered, professional photography, highly recognizable likeness",
-    
+    "photorealistic": "professional cinematic portrait of the person, shot on 85mm lens, f/1.8, soft bokeh background, blurred backdrop, sharp focus on facial features, high-end studio lighting, masterpiece, 8k raw photo",    
+  
     # 🎌 Anime Style
     "anime": "official anime style portrait of the person, high-quality 2D art, cel shaded, clean lineart, studio ghibli aesthetic, flat colors, keeping original facial features, expressive eyes",
     
