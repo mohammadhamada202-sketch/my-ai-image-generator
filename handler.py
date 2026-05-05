@@ -5,15 +5,32 @@ import gc
 from io import BytesIO
 from diffusers import StableDiffusionXLPipeline, StableDiffusionXLImg2ImgPipeline, AutoencoderKL
 
-# استيراد الملفات المساعدة
-from avatar_styles_config import AVATAR_STYLES, AVATAR_NEGATIVE_PROMPT
-from dimensions_helper import get_dimensions
-from translator_helper import translate_and_optimize
+# --- [1. دمج الإعدادات مباشرة لضمان الاستقرار] ---
+# وضعنا القيم هنا لأن السيرفر يواجه مشكلة في قراءة الملف المنفصل[cite: 2, 3]
+AVATAR_STYLES = {
+    "photorealistic": "professional cinematic portrait of the person, shot on 85mm lens, f/1.8, soft bokeh background, blurred backdrop, sharp focus on face, high-end studio lighting, 8k raw photo, extreme skin detail",
+    "anime": "masterpiece, official anime style art of the person, high-quality 2D, studio ghibli aesthetic, cel shaded, clean lineart, vibrant colors",
+    "3d_render": "highly detailed 3D Disney Pixar style avatar of the person, stylized digital character, Unreal Engine 5 render, cinematic lighting",
+    "pixel_art": "genuine 8-bit pixel art avatar of the person, retro video game sprite, clean square pixels",
+    "sketch": "raw charcoal sketch of the person on textured paper, hand-drawn artistic lines, rough hatching, high contrast",
+    "abstract": "abstract digital art portrait of the person, geometric shapes, double exposure, vibrant neon color splashes"
+}
 
-# إعدادات الموديلات العالمية
-REALISM_MODEL = "Runware/Juggernaut-XL-v9"  # للواقعية والـ 3D
-ANIME_MODEL = "cagliostrolab/animagine-xl-3.1" # للأنمي والكرتون الاحترافي[cite: 1]
-VAE_ID = "madebyollin/sdxl-vae-fp16-fix" # لإصلاح الألوان والدقة[cite: 1]
+AVATAR_NEGATIVE_PROMPT = "lowres, bad anatomy, bad hands, text, error, cropped, worst quality, low quality, blurry, grainy, deformed face, unrecognizable"
+
+# --- [2. استيراد الملفات المساعدة مع نظام حماية] ---
+try:
+    from dimensions_helper import get_dimensions
+    from translator_helper import translate_and_optimize
+except ImportError:
+    # وظائف احتياطية في حال تعذر العثور على الملفات المساعدة
+    def get_dimensions(job_input): return (1024, 1024)
+    def translate_and_optimize(prompt): return prompt
+
+# --- [3. إعدادات الموديلات العالمية] ---
+REALISM_MODEL = "Runware/Juggernaut-XL-v9" 
+ANIME_MODEL = "cagliostrolab/animagine-xl-3.1"
+VAE_ID = "madebyollin/sdxl-vae-fp16-fix"
 
 device = "cuda"
 
@@ -27,7 +44,7 @@ def load_pipeline(model_id):
         variant="fp16",
         use_safetensors=True
     ).to(device)
-    pipe.enable_xformers_memory_efficient_attention() # توفير الذاكرة[cite: 1]
+    pipe.enable_xformers_memory_efficient_attention() 
     return pipe
 
 # تحميل الموديلات عند بدء تشغيل السيرفر
@@ -41,6 +58,7 @@ img_pipe_anime = StableDiffusionXLImg2ImgPipeline.from_pipe(pipe_anime).to(devic
 
 def handler(job):
     try:
+        # تنظيف الذاكرة لضمان استقرار الموديلات الضخمة
         torch.cuda.empty_cache()
         gc.collect()
 
@@ -49,31 +67,35 @@ def handler(job):
         user_prompt = job_input.get('prompt', '')
         style = job_input.get('style', 'photorealistic')
         
-        # 1. تحسين البرومبت (الترجمة التلقائية)[cite: 1]
+        # 1. تحسين البرومبت
         optimized_prompt = translate_and_optimize(user_prompt)
         
-        # 2. جلب الستايل المناسب
+        # 2. جلب الستايل من القائمة المدمجة
         style_prompt = AVATAR_STYLES.get(style, AVATAR_STYLES['photorealistic'])
 
-        # 3. اختيار الموديل المناسب بناءً على الستايل[cite: 1]
+        # 3. اختيار الموديل المناسب بناءً على الستايل
         if style in ['anime', 'cartoon']:
             active_pipe = pipe_anime
             active_img_pipe = img_pipe_anime
-            print(f"Using Anime Engine for style: {style}")
         else:
             active_pipe = pipe_realism
             active_img_pipe = img_pipe_realism
-            print(f"Using Realism Engine for style: {style}")
 
         # 4. التوليد
         if mode == 'text':
             width, height = get_dimensions(job_input)
-            from text_generator import generate_from_text
-            output_img = generate_from_text(active_pipe, optimized_prompt, style_prompt, AVATAR_NEGATIVE_PROMPT, width, height)
+            # توليد من نص
+            output_img = active_pipe(
+                prompt=f"{style_prompt}, {optimized_prompt}",
+                negative_prompt=AVATAR_NEGATIVE_PROMPT,
+                width=width,
+                height=height,
+                num_inference_steps=40
+            ).images[0]
         else:
+            # توليد أفاتار (صورة إلى صورة)
             image_b64 = job_input.get('image')
             from avatar_generator import generate_avatar
-            # نمرر الموديل المختار للدالة
             output_img = generate_avatar(active_img_pipe, image_b64, optimized_prompt, style, AVATAR_NEGATIVE_PROMPT)
 
         # 5. التصدير بأعلى جودة
