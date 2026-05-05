@@ -2,7 +2,7 @@ import torch
 from PIL import Image, ImageOps, ImageFilter
 import base64
 from io import BytesIO
-from avatar_styles_config import AVATAR_STYLES, AVATAR_NEGATIVE_PROMPT
+
 
 def generate_avatar(img_pipe, image_b64, prompt, style_key, negative_prompt):
     try:
