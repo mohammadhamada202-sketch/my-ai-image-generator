@@ -5,8 +5,7 @@ import gc
 from io import BytesIO
 from diffusers import StableDiffusionXLPipeline, StableDiffusionXLImg2ImgPipeline, AutoencoderKL
 
-# --- [1. دمج الإعدادات مباشرة لضمان الاستقرار] ---
-# وضعنا القيم هنا لأن السيرفر يواجه مشكلة في قراءة الملف المنفصل[cite: 2, 3]
+# --- [1. إعدادات الستايلات المدمجة] ---
 AVATAR_STYLES = {
     "photorealistic": "professional cinematic portrait of the person, shot on 85mm lens, f/1.8, soft bokeh background, blurred backdrop, sharp focus on face, high-end studio lighting, 8k raw photo, extreme skin detail",
     "anime": "masterpiece, official anime style art of the person, high-quality 2D, studio ghibli aesthetic, cel shaded, clean lineart, vibrant colors",
@@ -23,19 +22,35 @@ try:
     from dimensions_helper import get_dimensions
     from translator_helper import translate_and_optimize
 except ImportError:
-    # وظائف احتياطية في حال تعذر العثور على الملفات المساعدة
     def get_dimensions(job_input): return (1024, 1024)
     def translate_and_optimize(prompt): return prompt
 
-# --- [3. إعدادات الموديلات العالمية] ---
-REALISM_MODEL = "Runware/Juggernaut-XL-v9" 
+# --- [3. إعدادات الموديلات - تم استبدال الموديل المعطل بموديل رسمي مفتوح] ---
+REALISM_MODEL = "SG161222/RealVisXL_V4.0" # بديل احترافي ومفتوح يتجاوز خطأ 401
 ANIME_MODEL = "cagliostrolab/animagine-xl-3.1"
 VAE_ID = "madebyollin/sdxl-vae-fp16-fix"
 
-device = "cuda"
+# متغيرات عالمية لإدارة الذاكرة
+current_model_id = None
+pipe = None
+img_pipe = None
 
-def load_pipeline(model_id):
-    """دالة مساعدة لتحميل الموديلات بأفضل إعدادات للجودة"""
+def load_model_on_demand(model_id):
+    """تحميل الموديل المطلوب فقط ومسح القديم لتوفير الذاكرة"""
+    global current_model_id, pipe, img_pipe
+    
+    if current_model_id == model_id:
+        return pipe, img_pipe
+
+    print(f"--- Switching Engine to: {model_id} ---")
+    
+    # تنظيف الذاكرة تماماً قبل تحميل الموديل الجديد
+    if pipe is not None:
+        del pipe
+        del img_pipe
+        torch.cuda.empty_cache()
+        gc.collect()
+
     vae = AutoencoderKL.from_pretrained(VAE_ID, torch_dtype=torch.float16)
     pipe = StableDiffusionXLPipeline.from_pretrained(
         model_id,
@@ -43,22 +58,16 @@ def load_pipeline(model_id):
         torch_dtype=torch.float16,
         variant="fp16",
         use_safetensors=True
-    ).to(device)
-    pipe.enable_xformers_memory_efficient_attention() 
-    return pipe
-
-# تحميل الموديلات عند بدء تشغيل السيرفر
-print("--- Loading Realism Model ---")
-pipe_realism = load_pipeline(REALISM_MODEL)
-img_pipe_realism = StableDiffusionXLImg2ImgPipeline.from_pipe(pipe_realism).to(device)
-
-print("--- Loading Anime Model ---")
-pipe_anime = load_pipeline(ANIME_MODEL)
-img_pipe_anime = StableDiffusionXLImg2ImgPipeline.from_pipe(pipe_anime).to(device)
+    ).to("cuda")
+    pipe.enable_xformers_memory_efficient_attention()
+    
+    img_pipe = StableDiffusionXLImg2ImgPipeline.from_pipe(pipe).to("cuda")
+    current_model_id = model_id
+    return pipe, img_pipe
 
 def handler(job):
     try:
-        # تنظيف الذاكرة لضمان استقرار الموديلات الضخمة
+        # تنظيف سريع للذاكرة
         torch.cuda.empty_cache()
         gc.collect()
 
@@ -67,38 +76,30 @@ def handler(job):
         user_prompt = job_input.get('prompt', '')
         style = job_input.get('style', 'photorealistic')
         
-        # 1. تحسين البرومبت
+        # 1. اختيار الموديل المناسب بناءً على الستايل
+        target_model = ANIME_MODEL if style in ['anime', 'cartoon'] else REALISM_MODEL
+        active_pipe, active_img_pipe = load_model_on_demand(target_model)
+
+        # 2. تحسين البرومبت والستايل
         optimized_prompt = translate_and_optimize(user_prompt)
-        
-        # 2. جلب الستايل من القائمة المدمجة
         style_prompt = AVATAR_STYLES.get(style, AVATAR_STYLES['photorealistic'])
 
-        # 3. اختيار الموديل المناسب بناءً على الستايل
-        if style in ['anime', 'cartoon']:
-            active_pipe = pipe_anime
-            active_img_pipe = img_pipe_anime
-        else:
-            active_pipe = pipe_realism
-            active_img_pipe = img_pipe_realism
-
-        # 4. التوليد
+        # 3. التوليد
         if mode == 'text':
             width, height = get_dimensions(job_input)
-            # توليد من نص
             output_img = active_pipe(
                 prompt=f"{style_prompt}, {optimized_prompt}",
                 negative_prompt=AVATAR_NEGATIVE_PROMPT,
                 width=width,
                 height=height,
-                num_inference_steps=40
+                num_inference_steps=35
             ).images[0]
         else:
-            # توليد أفاتار (صورة إلى صورة)
             image_b64 = job_input.get('image')
             from avatar_generator import generate_avatar
             output_img = generate_avatar(active_img_pipe, image_b64, optimized_prompt, style, AVATAR_NEGATIVE_PROMPT)
 
-        # 5. التصدير بأعلى جودة
+        # 4. التصدير
         buffered = BytesIO()
         output_img.save(buffered, format="PNG", quality=95)
         return base64.b64encode(buffered.getvalue()).decode("utf-8")
