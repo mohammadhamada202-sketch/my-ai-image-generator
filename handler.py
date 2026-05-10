@@ -10,8 +10,9 @@ from diffusers import StableDiffusionXLPipeline, StableDiffusionXLImg2ImgPipelin
 CACHE_DIR = "/workspace/models"
 os.makedirs(CACHE_DIR, exist_ok=True)
 
-# --- [2. الستايلات مع ميزة الـ Enhance الاحترافي] ---
+# --- [2. الستايلات والمقاسات من الملفات الخارجية] ---
 from styles_config import STYLE_ENHANCERS, AVATAR_NEGATIVE_PROMPT
+from dimensions_config import get_image_dimensions  # تم إضافة استدعاء كود المقاسات هنا
 
 # الموديلات الرسمية والمجربة
 MODELS_CONFIG = {
@@ -37,7 +38,7 @@ def get_engine(style):
     global active_model_id, global_pipe, global_img_pipe
     
     # اختيار الموديل (الأنمي للأنمي والكرتون، والواقعي للبقية)
-    target_id = MODELS_CONFIG["anime"] if style in ['anime', 'cartoon'] else MODELS_CONFIG["realism"]
+    target_id = MODELS_CONFIG["anime"] if style in ['anime', 'cartoon', 'pixar'] else MODELS_CONFIG["realism"]
     
     if active_model_id == target_id and global_pipe is not None:
         return global_pipe, global_img_pipe
@@ -74,6 +75,10 @@ def handler(job):
         gc.collect()
 
         job_input = job['input']
+        
+        # --- [تعديل: استخراج المقاسات بناءً على طلب المستخدم] ---
+        width, height = get_image_dimensions(job_input)
+        
         style = job_input.get('style', 'photorealistic')
         mode = job_input.get('mode', 'text')
         user_prompt = job_input.get('prompt', '')
@@ -83,9 +88,12 @@ def handler(job):
 
         # 2. الـ Enhance الاحترافي (حقن المواصفات التقنية في البرومبت)
         enhancer = STYLE_ENHANCERS.get(style, STYLE_ENHANCERS['photorealistic'])
-        final_optimized_prompt = f"{enhancer}, {translated_prompt}, highly detailed, intricate details"
+        
+        # تحسين: وضع البرومبت المترجم أولاً لضمان دقة الوصف
+        final_optimized_prompt = f"{translated_prompt}, {enhancer}, highly detailed, intricate details"
         
         print(f"--- [ENHANCED PROMPT]: {final_optimized_prompt} ---")
+        print(f"--- [SELECTED SIZE]: {width}x{height} ---")
 
         # 3. جلب المحرك المناسب (الواقعي أو الأنمي)
         current_pipe, current_img_pipe = get_engine(style)
@@ -95,8 +103,13 @@ def handler(job):
             output_img = current_pipe(
                 prompt=final_optimized_prompt, 
                 negative_prompt=AVATAR_NEGATIVE_PROMPT,
+                
+                # --- [تعديل: تطبيق المقاسات المختارة هنا] ---
+                width=width,
+                height=height,
+                
                 num_inference_steps=40, # دقة عالية
-                guidance_scale=12.0     # التزام قوي بالوصف
+                guidance_scale=9.0 if style in ['cartoon', 'pixar'] else 12.0 # ضبط التوجيه حسب الستايل
             ).images[0]
         else:
             image_b64 = job_input.get('image')
