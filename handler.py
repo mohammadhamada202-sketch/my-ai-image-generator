@@ -11,15 +11,7 @@ CACHE_DIR = "/workspace/models"
 os.makedirs(CACHE_DIR, exist_ok=True)
 
 # --- [2. الستايلات مع ميزة الـ Enhance الاحترافي] ---
-STYLE_ENHANCERS = {
-    "photorealistic": "high-end cinematic portrait, extremely detailed facial features, 8k resolution, shot on 85mm lens, f/1.8, stunning soft bokeh, studio professional lighting, masterpiece, hyper-realistic skin texture",
-    "anime": "high-quality anime illustration, vibrant studio Ghibli colors, clean cinematic lineart, masterpiece, 4k, expressive lighting, official art style",
-    "3d_render": "octane render, unreal engine 5 style, highly detailed 3D character, ray tracing, cinematic rim lighting, polished textures, volumetric fog",
-    "sketch": "professional charcoal graphite drawing, artistic hatching, elegant pencil strokes, high contrast, textured paper aesthetic",
-    "pixel_art": "meticulous 8-bit pixel art, high-quality retro game aesthetic, sharp vibrant pixels, iconic character design"
-}
-
-AVATAR_NEGATIVE_PROMPT = "lowres, bad anatomy, text, error, cropped, blurry, grainy, ugly, deformed, duplicate, watermark"
+from styles_config import STYLE_ENHANCERS, AVATAR_NEGATIVE_PROMPT
 
 # الموديلات الرسمية والمجربة
 MODELS_CONFIG = {
