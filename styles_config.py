@@ -1,32 +1,30 @@
 # styles_config.py
 
-STYLE_PROMPTS = {
-    # الستايل الكرتوني: شكل ديزني/بيكسار مع ألوان زاهية وتعبيرات واضحة
-    "cartoon": "highly stylized cartoon illustration, 3D Disney Pixar style, cute character design, bold expressive eyes, smooth textures, vibrant saturated colors, masterpiece, playful aesthetic",
+STYLE_ENHANCERS = {
+    # 1. الواقعي
+    "photorealistic": "professional cinematic portrait, shot on 85mm lens, f/1.8, soft bokeh, 8k raw photo, highly detailed skin texture, masterpiece",
     
-    # الستايل الواقعي المعتمد في الموقع
-    "realistic": "hyper-realistic portrait, 8k raw photo, cinematic lighting, ultra-detailed skin texture, professional studio photography[span_0](start_span)[span_0](end_span)",
+    # 2. كرتون (نمط الرسوم المتحركة الكلاسيكي)
+    "cartoon": "classic 2D vector art style, flat cel shading, vibrant colors, clean thick outlines, fun character design, masterpiece",
     
-    # ستايل الأنمي: رسم ياباني ثنائي الأبعاد
-    "anime": "official anime style art, 2D, flat color, cel shaded, thick outlines, studio ghibli aesthetic, hand-drawn illustration, high-quality vector art, vibrant colors, no realism",
+    # 3. أنمي
+    "anime": "high-quality anime illustration, studio Ghibli aesthetic, clean cinematic lineart, vibrant colors, official art style, masterpiece",
     
-    # ستايل الألعاب 
-    "3d_render": "highly detailed 3D gaming character, Unreal Engine 5 render, Octane render, stylized character design, smooth clay texture, cinematic gaming lighting",
+    # 4. نمط بيكسار (الكرتون ثلاثي الأبعاد)
+    "pixar": "cute Disney Pixar 3D animation style, rounded smooth features, vibrant playful colors, soft cinematic studio lighting, high-quality 3D render, masterpiece",
     
-    # ستايل البيكسل 
-    "pixel_art": "genuine 8-bit pixel art, visible square pixels, nostalgic gaming aesthetic, clean pixel edges, 2D sprite",
+    # 5. بيكسل آرت
+    "pixel_art": "meticulous 8-bit pixel art, retro video game aesthetic, sharp vibrant pixels, iconic character design, masterpiece",
     
-    # ستايل السكيتش 
-    "sketch": "raw charcoal sketch on textured paper, messy graphite pencil strokes, hand-drawn artistic lines, rough hatching, elegant minimalist portrait sketch",
+    # 6. رسم يدوي (سكتش)
+    "sketch": "professional charcoal drawing, hand-drawn strokes, artistic hatching, high contrast, textured paper aesthetic, masterpiece",
     
-    # ستايل التجريدي 
-    "abstract": "abstract digital art, geometric shapes, double exposure, vibrant neon color splashes, liquid metal textures, artistic distortion",
+    # 7. ريندر ثلاثي الأبعاد (واقعي تقني)
+    "3d_render": "highly detailed 3D character, Unreal Engine 5 render, ray tracing, polished textures, volumetric lighting, octane render, masterpiece",
     
-    # زيادة احتياط لعدم حدوث خطأ
-    "photorealistic": "professional studio portrait, 8k raw photo, cinematic rim lighting, masterpiece[span_1](start_span)[span_1](end_span)"
+    # 8. تجريدي
+    "abstract": "abstract digital art portrait, geometric shapes, double exposure, vibrant neon color splashes, artistic expression, masterpiece"
 }
 
-NEGATIVE_PROMPT = (
-    "photorealistic, real life, 3d, photography, depth of field, blurry, distorted, "
-    "lowres, text, watermark, bad anatomy, poorly drawn face, grainy, noisy, messy"
-)
+# البرومبت السلبي الموحد لضمان الجودة
+AVATAR_NEGATIVE_PROMPT = "lowres, bad anatomy, bad hands, text, error, cropped, worst quality, low quality, blurry, grainy, deformed face, unrecognizable, watermark"
