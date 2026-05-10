@@ -22,7 +22,7 @@ def generate_avatar(img_pipe, image_b64, prompt, style_key, negative_prompt):
         processed_init = ImageOps.fit(init_image, (target_size, target_size), method=Image.LANCZOS, centering=(0.5, 0.4))
 
         # 3. جلب الإعدادات من ملف الستايلات
-        from styles_config import STYLE_ENHANCERS, AVATAR_NEGATIVE_PROMPT
+        from avatar_styles_config import AVATAR_STYLES, AVATAR_NEGATIVE_PROMPT
         style_prompt = STYLE_ENHANCERS.get(style_key, STYLE_ENHANCERS["photorealistic"])
         
         # 4. هندسة البرومبت لتركيز الدقة على ملامح الوجه
