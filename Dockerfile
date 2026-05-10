@@ -19,7 +19,7 @@ RUN pip install --no-cache-dir xformers==0.0.22.post7 --index-url https://downlo
 # نسخ جميع الملفات الجديدة (مهم جداً)
 COPY handler.py .
 COPY styles_config.py .
-COPY dimensions_helper.py .
+COPY dimensions_config.py .
 COPY text_generator.py .
 COPY avatar_generator.py .
 COPY translator_helper.py .
