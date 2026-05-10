@@ -1,31 +1,23 @@
-# dimensions_helper.py
+# dimensions_config.py
 
-def get_dimensions(job_input):
+# تعريف المقاسات القياسية لـ SDXL لضمان أعلى جودة ودقة
+DIMENSIONS_MAP = {
+    "square": {"width": 1024, "height": 1024},      # 1:1 (إنستجرام)
+    "portrait": {"width": 832, "height": 1216},    # 2:3 (بورتريه احترافي)
+    "tiktok": {"width": 768, "height": 1344},      # 9:16 (تيك توك، ريلز، ستوري)
+    "landscape": {"width": 1216, "height": 832},   # 3:2 (سينمائي/عرضي)
+    "standard": {"width": 1024, "height": 1024}     # الافتراضي
+}
+
+def get_image_dimensions(job_input):
     """
-    تحديد المقاسات بناءً على الـ aspect_ratio المرسل من الموقع
-    أو استخدام العرض والطول المباشر إذا توفرا.
+    تحديد المقاسات بناءً على نسبة العرض (aspect_ratio) المرسلة من التطبيق.
     """
-    # 1. جلب اسم المقاس المرسل من الموقع (مثل 9:16 أو 1:1)
-    aspect_ratio = job_input.get('aspect_ratio', '1:1')
-
-    # 2. تحديد الأبعاد الافتراضية بناءً على المسمى
-    if aspect_ratio == "9:16":
-        # المقاس الطولي (Portrait)
-        width, height = 768, 1344
-    elif aspect_ratio == "16:9":
-        # المقاس العرضي (Landscape)
-        width, height = 1344, 768
-    elif aspect_ratio == "1:1":
-        # المقاس المربع (Square)
-        width, height = 1024, 1024
-    else:
-        # إذا لم يُرسل مسمى، نبحث عن أرقام مباشرة width/height أو نستخدم المربع كافتراضي
-        width = job_input.get('width', 1024)
-        height = job_input.get('height', 1024)
-
-    # 3. التأكد من أن المقاسات مضاعفات العدد 8 (مطلوب لـ SDXL لضمان الجودة)
-    width = (width // 8) * 8
-    height = (height // 8) * 8
+    aspect_ratio = job_input.get('aspect_ratio', 'square').lower()
     
-    print(f"DEBUG: Selected Dimensions -> {width}x{height} for Ratio -> {aspect_ratio}")
-    return width, height
+    # التحقق من وجود المقاس في القائمة
+    if aspect_ratio in DIMENSIONS_MAP:
+        return DIMENSIONS_MAP[aspect_ratio]["width"], DIMENSIONS_MAP[aspect_ratio]["height"]
+    
+    # مقاس احتياطي في حال عدم إرسال قيمة صحيحة
+    return 1024, 1024
