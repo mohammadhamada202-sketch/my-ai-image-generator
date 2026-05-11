@@ -2,14 +2,14 @@ import runpod
 import os
 import base64
 import io
-from google import genai  # استدعاء المكتبة الجديدة 
+from google import genai  # المكتبة الحديثة
 from translator_helper import translate_and_optimize
-from dimensions_config import get_image_dimensions # التأكد من تطابق اسم الملف [cite: 15]
+from dimensions_config import get_image_dimensions
 from avatar_generator import generate_avatar
 
 def handler(job):
     try:
-        # إعداد العميل الجديد (Client) لمكتبة قوقل الحديثة 
+        # إعداد عميل Gemini باستخدام المفتاح من إعدادات RunPod
         api_key = os.environ.get("GEMINI_API_KEY")
         client = genai.Client(api_key=api_key)
         
@@ -18,29 +18,31 @@ def handler(job):
         style = job_input.get('style', 'photorealistic')
         user_text = job_input.get('prompt', '')
 
-        # 1. الترجمة والتحسين الاحترافي عبر OpenAI
+        # 1. الترجمة والتحسين عبر OpenAI (GPT-4o) [cite: 36]
         final_optimized_prompt = translate_and_optimize(user_text)
         
-        # 2. جلب المقاسات الصحيحة
+        # 2. جلب المقاسات من dimensions_config.py
         width, height = get_image_dimensions(job_input)
 
         if mode == 'text':
-            # --- وضع توليد الصور من النص باستخدام Nano Banana 2 ---
-            response = client.models.generate_image(
+            # --- وضع توليد الصور من النص (Nano Banana 2) ---
+            # تم تصحيح الدالة لتعمل مع المكتبة الجديدة 
+            response = client.models.generate_content(
                 model='gemini-3-flash-image',
-                prompt=final_optimized_prompt,
+                contents=final_optimized_prompt,
                 config={'aspect_ratio': f"{width}:{height}"}
             )
-            # تحويل النتيجة لـ Base64 لإرسالها لموقعك
-            return base64.b64encode(response.image.bits).decode("utf-8")
+            # استخراج الصورة من بيانات الاستجابة
+            image_bytes = response.candidates[0].content.parts[0].inline_data.data
+            return base64.b64encode(image_bytes).decode("utf-8")
             
         else:
-            # --- وضع الأفاتار (تحويل الصورة بذكاء Gemini) ---
+            # --- وضع الأفاتار (Image-to-Image) ---
             image_b64 = job_input.get('image')
             # استدعاء دالة الأفاتار المطورة
             output_img = generate_avatar(image_b64, final_optimized_prompt, style)
             
-            # تحويل الصورة (PIL Image) لـ Base64
+            # تحويل PIL Image إلى Base64
             buffered = io.BytesIO()
             output_img.save(buffered, format="PNG")
             return base64.b64encode(buffered.getvalue()).decode("utf-8")
@@ -49,5 +51,5 @@ def handler(job):
         print(f"--- [HANDLER ERROR] ---: {str(e)}")
         return {"error": str(e)}
 
-# بدء السيرفر
+# تشغيل السيرفر
 runpod.serverless.start({"handler": handler})
