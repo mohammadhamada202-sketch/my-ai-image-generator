@@ -1,27 +1,30 @@
-FROM runpod/pytorch:2.1.0-py3.10-cuda11.8.0-devel
+# استخدم نسخة بايثون نحيفة بدلاً من Pytorch الضخم لتوفير المساحة والمال
+FROM python:3.10-slim
 
 WORKDIR /
 
-RUN pip uninstall -y numpy xformers
-RUN pip install --upgrade pip && pip install --no-cache-dir "numpy<2"
+# تثبيت الأدوات الأساسية فقط
+RUN apt-get update && apt-get install -y \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
 
-# تثبيت المكتبات مع تحديد الإصدارات المطلوبة
-RUN pip install --no-cache-dir \
-    huggingface-hub==0.23.2 \
-    transformers>=4.40.0 \
-    accelerate>=0.30.0 \
-    diffusers>=0.29.0 \
+# تثبيت المكتبات المطلوبة فقط لنظام الـ API
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir \
+    runpod \
+    google-generativeai \
     openai \
-    runpod
+    Pillow \
+    requests
 
-RUN pip install --no-cache-dir xformers==0.0.22.post7 --index-url https://download.pytorch.org/whl/cu118
-
-# نسخ جميع الملفات الجديدة (مهم جداً)
+# نسخ ملفات الكود الخاصة بك
 COPY handler.py .
-COPY styles_config.py .
-COPY dimensions_config.py .
-COPY text_generator.py .
 COPY avatar_generator.py .
 COPY translator_helper.py .
+COPY dimensions_config.py .
+
+# ملاحظة: إذا كان ملف dimensions_config يسمى في الكود dimensions_helper، تأكد من مطابقة الاسم
+# COPY dimensions_config.py ./dimensions_helper.py
 
 CMD [ "python", "-u", "/handler.py" ]
