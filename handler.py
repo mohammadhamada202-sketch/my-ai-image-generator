@@ -17,23 +17,20 @@ def handler(job):
         style = job_input.get('style', 'photorealistic')
         user_text = job_input.get('prompt', '')
 
-        # 1. الترجمة عبر OpenAI
+        # 1. الترجمة عبر OpenAI نجحت تماماً في السجلات السابقة
         final_optimized_prompt = translate_and_optimize(user_text)
-        
+        print(f"Success! Translated Prompt: {final_optimized_prompt}")
+
         # 2. المقاسات
         width, height = get_image_dimensions(job_input)
 
         if mode == 'text':
-            # الموديل الرسمي المستقر لتوليد الصور في Gemini 3
-            # إذا استمر الخطأ جرب تبديله بـ 'imagen-3' أو 'gemini-2.0-flash' حسب اشتراكك
-            target_model = 'gemini-1.5-flash' 
-            
+            # تغيير الموديل لـ imagen-3 لضمان التوافق مع API الصور
             response = client.models.generate_content(
-                model=target_model,
-                contents=f"Generate a high-quality image: {final_optimized_prompt}. Aspect ratio {width}:{height}"
+                model='imagen-3', 
+                contents=f"{final_optimized_prompt}. Aspect ratio {width}:{height}"
             )
             
-            # استخراج البيانات
             image_bytes = response.candidates[0].content.parts[0].inline_data.data
             return base64.b64encode(image_bytes).decode("utf-8")
             
