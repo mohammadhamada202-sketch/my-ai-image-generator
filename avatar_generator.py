@@ -21,9 +21,9 @@ def generate_avatar(image_b64, prompt, style_key):
         full_instruction = f"Transform this person into {style_prompt}. Context: {prompt}"
         image_part = {"mime_type": "image/png", "data": image_b64}
 
-        # استخدام imagen-3 لعملية التحويل
+        # استخدام الموديل الأحدث الذي يدمج الصورة والنص
         response = client.models.generate_content(
-            model='imagen-3',
+            model='gemini-2.0-flash',
             contents=[full_instruction, image_part]
         )
 
