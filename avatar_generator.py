@@ -1,72 +1,59 @@
-import torch
-from PIL import Image, ImageOps
+import google.generativeai as genai
+from PIL import Image
 import base64
 from io import BytesIO
-import gc
+import os
 
-# [1] الستايلات الاحترافية مدمجة مباشرة لضمان الاستقرار السرعة
+# [1] الستايلات الاحترافية مدمجة (تم تحديثها لتناسب ذكاء Gemini)
 AVATAR_STYLES = {
-    # 📸 Portrait Mode: تركيز عالي على الوجه مع خلفية مغبشة احترافية
-    "photorealistic": "professional cinematic portrait of the person, ultra-detailed eyes, sharp focus on face, shot on 85mm lens, f/1.8, soft bokeh background, blurred backdrop, high-end studio lighting, 8k raw photo, extreme skin detail, subsurface scattering",
-    
-    # 🎌 Anime Style: تحسين الخطوط والألوان لتصبح كأنمي احترافي
-    "anime": "masterpiece, official anime style art of the person, high-quality 2D, studio ghibli aesthetic, cel shaded, clean lineart, vibrant colors, highly detailed expressive eyes, anime character design, best quality",
-    
-    # 🎮 3D Render: ستايل بيكسار المطور
-    "3d_render": "highly detailed 3D Disney Pixar style avatar of the person, stylized digital character, Unreal Engine 5 render, subsurface scattering, cinematic gaming lighting, smooth clay textures, masterfully rendered 3D art",
-    
-    # 👾 Pixel Art: بيكسل آرت نظيف وحاد
-    "pixel_art": "genuine 8-bit pixel art avatar of the person, retro video game sprite, limited color palette, clean square pixels, sharp edges, recognizable facial features in pixel form",
-    
-    # ✏️ Sketch: رسم يدوي فخم
-    "sketch": "raw charcoal sketch of the person on textured paper, messy graphite pencil strokes, hand-drawn artistic lines, rough hatching, elegant minimalist portrait, high contrast black and white",
-    
-    # 🎨 Abstract: فن تجريدي عصري
-    "abstract": "abstract digital art portrait of the person, geometric shapes, double exposure, vibrant neon color splashes, artistic distortion, dreamlike surreal composition, masterpiece"
+    "photorealistic": "professional cinematic portrait, ultra-detailed eyes, sharp focus on face, 8k raw photo, extreme skin detail, subsurface scattering",
+    "anime": "official anime style art, studio ghibli aesthetic, cel shaded, clean lineart, vibrant colors, highly detailed eyes",
+    "3d_render": "Disney Pixar style 3D avatar, stylized digital character, Unreal Engine 5 render, cinematic lighting, smooth clay textures",
+    "pixel_art": "genuine 8-bit pixel art, retro video game sprite, clean square pixels, sharp edges",
+    "sketch": "raw charcoal sketch on textured paper, hand-drawn artistic lines, elegant minimalist portrait, high contrast B&W",
+    "abstract": "abstract digital art, geometric shapes, vibrant neon color splashes, artistic distortion, dreamlike surreal composition"
 }
 
-AVATAR_NEGATIVE_PROMPT = (
-    "lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, "
-    "fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, "
-    "signature, watermark, username, blurry, grainy, fuzzy, deformed face, unrecognizable"
-)
-
-def generate_avatar(img_pipe, image_b64, prompt, style_key, negative_prompt_input=None):
+def generate_avatar(image_b64, prompt, style_key):
     try:
-        # 2. معالجة الصورة الأصلية (الزوم الذكي خلف الكواليس)
-        image_data = base64.b64decode(image_b64)
-        init_image = Image.open(BytesIO(image_data)).convert("RGB")
-        init_image = ImageOps.exif_transpose(init_image)
+        # إعداد المحرك (Nano Banana 2)
+        # المفتاح يتم جلبه من إعدادات RunPod التي وضعتها
+        genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
+        model = genai.GenerativeModel('gemini-3-flash-image')
 
-        # تحويل لمربع 1024 للتركيز على ملامح الوجه لضمان أعلى دقة
-        init_image = ImageOps.fit(init_image, (1024, 1024), method=Image.LANCZOS, centering=(0.5, 0.4))
-
-        # 3. جلب الستايل من القائمة المدمجة أعلاه
+        # جلب الستايل المناسب
         style_prompt = AVATAR_STYLES.get(style_key, AVATAR_STYLES["photorealistic"])
         
-        # 4. هندسة البرومبت النهائي
-        final_prompt = f"{prompt}, {style_prompt}, masterpiece, sharp focus on face, detailed skin"
-        neg_prompt = negative_prompt_input if negative_prompt_input else AVATAR_NEGATIVE_PROMPT
+        # تحضير الصورة المرفوعة لـ Gemini
+        # نرسل الـ Base64 مباشرة كما هو مطلوب في الـ API
+        image_part = {
+            "mime_type": "image/png", # أو image/jpeg حسب مدخلات موقعك
+            "data": image_b64
+        }
 
-        # 5. إعدادات القوة (Strength) لضمان ظهور الستايل مع الحفاظ على الشبه
-        # 0.60 للستايلات الفنية و 0.45 للواقعية
-        custom_strength = 0.60 if style_key != "photorealistic" else 0.45
+        # هندسة الأمر النهائي (Instruction)
+        # OpenAI قام بترجمة الـ prompt مسبقاً، وهنا نطلب من Gemini تطبيق الستايل
+        full_instruction = (
+            f"Transform the person in this image into this style: {style_prompt}. "
+            f"Context: {prompt}. "
+            f"IMPORTANT: Maintain the person's original facial features, identity, and gender. "
+            f"The output must be a high-quality stylized portrait."
+        )
 
-        # 6. التوليد (Image-to-Image)
-        torch.cuda.empty_cache()
-        output_image = img_pipe(
-            prompt=final_prompt,
-            negative_prompt=neg_prompt,
-            image=init_image,
-            strength=custom_strength,
-            num_inference_steps=35,
-            guidance_scale=10.0
-        ).images[0]
+        # إرسال الطلب لـ Google
+        response = model.generate_content([full_instruction, image_part])
 
-        gc.collect()
+        # تحويل النتيجة (Base64) القادمة من Google إلى PIL Image ليعالجها الـ Handler
+        generated_image_data = base64.b64decode(response.candidates[0].content.parts[0].inline_data.data)
+        output_image = Image.open(BytesIO(generated_image_data))
+
         return output_image
 
     except Exception as e:
         print(f"--- [AVATAR GENERATOR ERROR]: {str(e)} ---")
-        try: return init_image
-        except: return None
+        # في حال الخطأ، نعود بالصورة الأصلية لكي لا يفصل الموقع
+        try:
+            image_data = base64.b64decode(image_b64)
+            return Image.open(BytesIO(image_data))
+        except:
+            return None
