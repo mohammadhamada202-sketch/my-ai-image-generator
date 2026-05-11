@@ -5,11 +5,11 @@ import io
 import os
 
 AVATAR_STYLES = {
-    "photorealistic": "professional cinematic portrait, 8k raw photo, detailed",
-    "anime": "official anime style, studio ghibli aesthetic, clean lineart",
+    "photorealistic": "professional cinematic portrait, 8k raw photo",
+    "anime": "high-quality anime style, studio ghibli aesthetic",
     "3d_render": "Disney Pixar style 3D avatar, Unreal Engine 5 render",
     "pixel_art": "8-bit pixel art, retro video game sprite",
-    "sketch": "charcoal sketch, hand-drawn artistic lines",
+    "sketch": "charcoal sketch, hand-drawn lines",
     "abstract": "abstract digital art, vibrant neon splashes"
 }
 
@@ -21,9 +21,9 @@ def generate_avatar(image_b64, prompt, style_key):
         full_instruction = f"Transform this person into {style_prompt}. Context: {prompt}"
         image_part = {"mime_type": "image/png", "data": image_b64}
 
-        # استخدام الموديل المستقر
+        # استخدام imagen-3 لعملية التحويل
         response = client.models.generate_content(
-            model='gemini-1.5-flash',
+            model='imagen-3',
             contents=[full_instruction, image_part]
         )
 
