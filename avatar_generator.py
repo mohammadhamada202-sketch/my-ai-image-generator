@@ -15,25 +15,30 @@ AVATAR_STYLES = {
 
 def generate_avatar(image_b64, prompt, style_key):
     try:
+        # إعداد العميل
         client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
         style_prompt = AVATAR_STYLES.get(style_key, AVATAR_STYLES["photorealistic"])
         
+        # صياغة التعليمات
         full_instruction = (
             f"Transform the person in this image into {style_prompt}. "
             f"Context: {prompt}. Maintain identity and facial features."
         )
 
+        # تحضير الجزء الخاص بالصورة
         image_part = {"mime_type": "image/png", "data": image_b64}
 
-        # تم تبسيط الاستدعاء لتجنب أخطاء الـ Validation
+        # طلب التوليد
         response = client.models.generate_content(
             model='gemini-3-flash-image',
             contents=[full_instruction, image_part]
         )
 
+        # استخراج الصورة
         img_raw = response.candidates[0].content.parts[0].inline_data.data
         return Image.open(io.BytesIO(img_raw))
 
     except Exception as e:
         print(f"--- [GENERATOR ERROR] ---: {str(e)}")
+        # في حال الفشل نرجع الصورة الأصلية للمستخدم
         return Image.open(io.BytesIO(base64.b64decode(image_b64)))
