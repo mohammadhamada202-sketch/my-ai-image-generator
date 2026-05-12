@@ -17,24 +17,26 @@ def handler(job):
         style = job_input.get('style', 'photorealistic')
         user_text = job_input.get('prompt', '')
 
-        # الترجمة تعمل بنجاح (OpenAI)
+        # [1] المترجم الاحترافي (OpenAI)
         final_optimized_prompt = translate_and_optimize(user_text)
 
+        # [2] المقاسات
         width, height = get_image_dimensions(job_input)
 
         if mode == 'text':
-            # التعديل الجذري: استخدام اسم الموديل المختصر 'imagen-3' 
-            # هذا الاسم مدعوم عالمياً في كل نسخ الـ API
+            # [3] استخدام 'imagen-3' كحل جذري لخطأ الـ 404
+            # هذا الاسم مدعوم رسمياً للتوليد عبر generate_content
             response = client.models.generate_content(
                 model='imagen-3', 
-                contents=f"{final_optimized_prompt}, hyper-realistic photography, 8k, cinematic lighting"
+                contents=f"{final_optimized_prompt}, hyper-realistic photography, 8k resolution, cinematic lighting"
             )
             
-            # استخراج الصورة (استخدام inline_data هو المسار الأكثر استقراراً)
+            # استخراج الصورة من البيانات المدمجة
             image_bytes = response.candidates[0].content.parts[0].inline_data.data
             return base64.b64encode(image_bytes).decode("utf-8")
             
         else:
+            # [4] وضع الأفاتار
             image_b64 = job_input.get('image')
             output_img = generate_avatar(image_b64, final_optimized_prompt, style)
             
