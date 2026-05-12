@@ -9,7 +9,7 @@ from avatar_generator import generate_avatar
 
 def handler(job):
     try:
-        # إعداد العميل باستخدام مفتاح API
+        # إعداد العميل
         api_key = os.environ.get("GEMINI_API_KEY")
         client = genai.Client(api_key=api_key)
         
@@ -18,36 +18,30 @@ def handler(job):
         style = job_input.get('style', 'photorealistic')
         user_text = job_input.get('prompt', '')
 
-        # [1] الترجمة والتحسين (OpenAI)
+        # [1] الترجمة والتحسين عبر OpenAI
         final_optimized_prompt = translate_and_optimize(user_text)
-        print(f"Success! Translated Prompt: {final_optimized_prompt}")
 
         # [2] المقاسات
         width, height = get_image_dimensions(job_input)
 
         if mode == 'text':
-            # [3] وصف فائق الواقعية لضمان جودة سينمائية
-            ultra_hd_prompt = (
-                f"{final_optimized_prompt}, hyper-realistic photography, 8k resolution, "
-                "cinematic lighting, sharp focus, extreme details, masterpiece"
-            )
-
-            # [4] استخدام كائن images المخصص لموديلات Imagen 3
+            # [3] الحل الجذري: استخدام كائن images المخصص لمحرك Imagen 3
             response = client.images.generate(
                 model='imagen-3.0-generate-002', 
-                prompt=ultra_hd_prompt,
+                prompt=f"{final_optimized_prompt}, hyper-realistic photography, 8k, extreme detail",
                 config={
                     'aspect_ratio': f"{width}:{height}",
-                    'safety_filter_level': 'block_few'
+                    'safety_filter_level': 'block_few',
+                    'person_generation': 'allow_all'
                 }
             )
             
-            # استخراج الصورة من بيانات البتات (Bits)
+            # استخراج الصورة مباشرة من بيانات البتات
             image_bytes = response.generated_images[0].image.bits
             return base64.b64encode(image_bytes).decode("utf-8")
             
         else:
-            # [5] وضع الأفاتار (تحويل صورة لصورة)
+            # [4] وضع الأفاتار
             image_b64 = job_input.get('image')
             output_img = generate_avatar(image_b64, final_optimized_prompt, style)
             
@@ -59,5 +53,4 @@ def handler(job):
         print(f"--- [HANDLER ERROR] ---: {str(e)}")
         return {"error": str(e)}
 
-# بدء السيرفر
 runpod.serverless.start({"handler": handler})
