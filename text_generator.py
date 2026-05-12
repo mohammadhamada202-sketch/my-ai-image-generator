@@ -12,5 +12,5 @@ def generate_from_text(pipe, prompt, style_prompt, negative_prompt, width, heigh
         num_inference_steps=30,
         guidance_scale=7.5
     ).images[0]
-    
+
     return image
