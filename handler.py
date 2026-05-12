@@ -17,18 +17,23 @@ def handler(job):
         style = job_input.get('style', 'photorealistic')
         user_text = job_input.get('prompt', '')
 
-        # [1] الترجمة (OpenAI) - ناجحة دائماً
+        # [1] المترجم يعمل بنجاح
         final_optimized_prompt = translate_and_optimize(user_text)
 
         # [2] المقاسات
         width, height = get_image_dimensions(job_input)
 
         if mode == 'text':
-            # [3] استخدام الدالة الأكثر استقراراً لضمان عدم وجود AttributeError
-            # نحدد الموديل imagen-3 ونترك للمكتبة التعامل مع الاستدعاء داخلياً
+            # [3] الوصف الاحترافي للجودة الفائقة
+            ultra_hd_prompt = (
+                f"{final_optimized_prompt}, hyper-realistic photography, 8k resolution, "
+                "cinematic lighting, sharp focus, extreme details, realistic textures"
+            )
+
+            # [4] استخدام generate_content لضمان عدم ظهور خطأ Attribute
             response = client.models.generate_content(
                 model='imagen-3.0-generate-002', 
-                contents=f"{final_optimized_prompt}, hyper-realistic, 8k, extreme detail. Aspect ratio {width}:{height}"
+                contents=f"{ultra_hd_prompt} Aspect ratio {width}:{height}"
             )
             
             # استخراج الصورة من البيانات المدمجة
@@ -36,7 +41,7 @@ def handler(job):
             return base64.b64encode(image_bytes).decode("utf-8")
             
         else:
-            # [4] الأفاتار
+            # [5] وضع الأفاتار
             image_b64 = job_input.get('image')
             output_img = generate_avatar(image_b64, final_optimized_prompt, style)
             
