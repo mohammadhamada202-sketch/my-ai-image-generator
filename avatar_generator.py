@@ -4,16 +4,14 @@ import base64
 import io
 import os
 
+# ستايلات واقعية فائقة الدقة
 AVATAR_STYLES = {
-    "photorealistic": (
-        "ultra-detailed professional cinematic portrait, hyper-realistic skin texture, "
-        "8k raw photo, cinematic lighting, masterpiece"
-    ),
+    "photorealistic": "ultra-detailed professional cinematic portrait, hyper-realistic skin, 8k raw photo",
     "anime": "high-quality anime style, studio ghibli aesthetic, vibrant colors",
-    "3d_render": "Disney Pixar style 3D avatar, Unreal Engine 5 render",
-    "pixel_art": "genuine 8-bit pixel art, retro video game sprite",
-    "sketch": "fine charcoal sketch, artistic pencil strokes",
-    "abstract": "abstract digital art portrait, surreal masterpiece"
+    "3d_render": "Disney Pixar style 3D avatar, Unreal Engine 5 render, cinematic lighting",
+    "pixel_art": "genuine 8-bit pixel art, retro video game sprite, clean pixels",
+    "sketch": "fine charcoal sketch, artistic pencil strokes, high contrast",
+    "abstract": "abstract digital art portrait, neon splashes, surreal masterpiece"
 }
 
 def generate_avatar(image_b64, prompt, style_key):
@@ -21,14 +19,14 @@ def generate_avatar(image_b64, prompt, style_key):
         client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
         style_prompt = AVATAR_STYLES.get(style_key, AVATAR_STYLES["photorealistic"])
         
-        full_instruction = f"Transform the person in this image into {style_prompt}. Context: {prompt}"
+        full_instruction = f"Transform the person in this image into {style_prompt}. Context: {prompt}. Maintain identity."
         
         # تحضير الصورة كـ Inline Data
         image_part = {"mime_type": "image/png", "data": image_b64}
 
-        # استخدام 'imagen-3' لضمان التوافق مع v1beta
+        # استخدام الموديل المستقر للرؤية والتوليد
         response = client.models.generate_content(
-            model='imagen-3',
+            model='gemini-1.5-flash',
             contents=[full_instruction, image_part]
         )
 
@@ -37,4 +35,5 @@ def generate_avatar(image_b64, prompt, style_key):
 
     except Exception as e:
         print(f"--- [GENERATOR ERROR] ---: {str(e)}")
+        # في حال الخطأ نرجع الصورة الأصلية لضمان عدم توقف الموقع
         return Image.open(io.BytesIO(base64.b64decode(image_b64)))
