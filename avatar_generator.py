@@ -4,7 +4,6 @@ import base64
 import io
 import os
 
-# ستايلات واقعية جداً تحاكي التصوير الفوتوغرافي الحقيقي
 AVATAR_STYLES = {
     "photorealistic": (
         "ultra-detailed professional cinematic portrait, hyper-realistic skin texture, "
@@ -27,18 +26,15 @@ def generate_avatar(image_b64, prompt, style_key):
             f"Context: {prompt}. Maintain identity and facial features."
         )
 
-        # تحويل الصورة واستخدام كائن images للتوليد
+        # الحل الجذري: استخدام كائن images وتمرير الصورة للتحويل
         response = client.images.generate(
             model='imagen-3.0-generate-002',
             prompt=full_instruction,
             image=base64.b64decode(image_b64)
         )
 
-        # استعادة الصورة من بيانات البتات
-        image_bits = response.generated_images[0].image.bits
-        return Image.open(io.BytesIO(image_bits))
+        return Image.open(io.BytesIO(response.generated_images[0].image.bits))
 
     except Exception as e:
         print(f"--- [GENERATOR ERROR] ---: {str(e)}")
-        # العودة بالصورة الأصلية في حال حدوث أي خطأ
         return Image.open(io.BytesIO(base64.b64decode(image_b64)))
