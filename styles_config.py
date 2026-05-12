@@ -6,7 +6,7 @@ STYLE_ENHANCERS = {
     
     # 2. كرتون (نمط الرسوم المتحركة الكلاسيكي)
     "cartoon": "classic 2D vector art style, flat cel shading, vibrant colors, clean thick outlines, fun character design, masterpiece",
-    
+
     # 3. أنمي
     "anime": "high-quality anime illustration, studio Ghibli aesthetic, clean cinematic lineart, vibrant colors, official art style, masterpiece",
     
