@@ -17,26 +17,40 @@ def handler(job):
         style = job_input.get('style', 'photorealistic')
         user_text = job_input.get('prompt', '')
 
-        # [1] الترجمة والتحسين عبر OpenAI
+        # الترجمة والتحسين (OpenAI)
         final_optimized_prompt = translate_and_optimize(user_text)
-
-        # [2] المقاسات
         width, height = get_image_dimensions(job_input)
 
         if mode == 'text':
-            # [3] استخدام الموديل المستقر 1.5 Flash
-            # بما أن حسابك مدفوع، سيفهم الموديل أمر التوليد بدقة فائقة
-            response = client.models.generate_content(
-                model='gemini-1.5-flash', 
-                contents=f"Generate a cinematic, hyper-realistic 8k image: {final_optimized_prompt}. Aspect ratio {width}:{height}"
-            )
+            # مصفوفة الموديلات الممكنة لتجاوز خطأ 404
+            potential_models = ['gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash-latest']
             
-            # [4] استخراج الصورة بأكثر طريقة آمنة
+            response = None
+            error_log = []
+
+            for model_name in potential_models:
+                try:
+                    print(f"Trying to generate with: {model_name}...")
+                    response = client.models.generate_content(
+                        model=model_name,
+                        contents=f"Generate a cinematic, hyper-realistic 8k image: {final_optimized_prompt}. Aspect ratio {width}:{height}"
+                    )
+                    if response:
+                        print(f"SUCCESS with model: {model_name}")
+                        break
+                except Exception as e:
+                    error_log.append(f"{model_name}: {str(e)}")
+                    continue
+
+            if not response:
+                raise Exception(f"All models failed. Details: {'; '.join(error_log)}")
+
+            # استخراج الصورة
             image_bytes = response.candidates[0].content.parts[0].inline_data.data
             return base64.b64encode(image_bytes).decode("utf-8")
             
         else:
-            # [5] وضع الأفاتار
+            # وضع الأفاتار
             image_b64 = job_input.get('image')
             output_img = generate_avatar(image_b64, final_optimized_prompt, style)
             
