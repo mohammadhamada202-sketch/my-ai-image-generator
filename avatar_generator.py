@@ -1,35 +1,81 @@
 from google import genai
+from google.genai import types # استيراد الأنواع للتحكم بالإعدادات
 from PIL import Image
 import base64
 import io
 import os
 
+# [1] ستايلات مطورة لضمان أقصى دقة (Ultra-High Resolution)
 AVATAR_STYLES = {
-    "photorealistic": "professional cinematic portrait, 8k raw photo",
-    "anime": "high-quality anime style, studio ghibli aesthetic",
-    "3d_render": "Disney Pixar style 3D avatar, Unreal Engine 5 render",
-    "pixel_art": "8-bit pixel art, retro video game sprite",
-    "sketch": "charcoal sketch, hand-drawn lines",
-    "abstract": "abstract digital art, vibrant neon splashes"
+    "photorealistic": (
+        "ultra-detailed professional cinematic portrait, hyper-realistic skin texture, "
+        "shot on 85mm lens, f/1.4, sharp focus on eyes, soft bokeh background, "
+        "8k raw photo, high-end studio lighting, subsurface scattering"
+    ),
+    "anime": (
+        "masterpiece, official anime art style, studio ghibli aesthetic, "
+        "high-quality 2D cel shaded, clean lineart, vibrant cinematic colors, "
+        "expressive eyes, highly detailed background"
+    ),
+    "3d_render": (
+        "Disney Pixar style 3D avatar, highly detailed digital character, "
+        "Unreal Engine 5 render, cinematic lighting, smooth clay textures, "
+        "masterfully rendered 3D art, vibrant colors"
+    ),
+    "pixel_art": (
+        "genuine 8-bit pixel art, high-quality retro game sprite, "
+        "clean square pixels, sharp edges, recognizable facial features, "
+        "vibrant limited color palette"
+    ),
+    "sketch": (
+        "fine charcoal sketch on textured paper, artistic graphite pencil strokes, "
+        "hand-drawn minimalist portrait, high contrast black and white, "
+        "elegant artistic hatching"
+    ),
+    "abstract": (
+        "modern abstract digital art portrait, geometric shapes, double exposure, "
+        "vibrant neon color splashes, artistic distortion, surreal masterpiece"
+    )
 }
 
 def generate_avatar(image_b64, prompt, style_key):
     try:
+        # [2] إعداد العميل (Client)
         client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
+        
+        # اختيار الستايل أو العودة للواقعي كافتراضي
         style_prompt = AVATAR_STYLES.get(style_key, AVATAR_STYLES["photorealistic"])
         
-        full_instruction = f"Transform this person into {style_prompt}. Context: {prompt}"
-        image_part = {"mime_type": "image/png", "data": image_b64}
-
-        # استخدام الموديل الأحدث الذي يدمج الصورة والنص
-        response = client.models.generate_content(
-            model='gemini-2.0-flash',
-            contents=[full_instruction, image_part]
+        # [3] هندسة الأمر النهائي لضمان أعلى جودة
+        full_instruction = (
+            f"Transform the person in this image into {style_prompt}. "
+            f"Context: {prompt}. "
+            "IMPORTANT: Maintain the person's identity, facial features, and gender. "
+            "Output must be a high-fidelity image."
         )
 
-        img_raw = response.candidates[0].content.parts[0].inline_data.data
-        return Image.open(io.BytesIO(img_raw))
+        # [4] التوليد باستخدام الموديل الأقوى (Imagen 3)
+        # ملاحظة: Imagen 3 هو الأفضل للصور الواقعية والتحويل الاحترافي
+        response = client.models.generate_image(
+            model='imagen-3.0-generate-002', # الإصدار المستقر والأقوى
+            prompt=full_instruction,
+            config=types.GenerateImageConfig(
+                number_of_images=1,
+                output_mime_type='image/png',
+                add_watermark=False, # اختياري
+                aspect_ratio="1:1"   # الأفضل للأفاتار
+            )
+        )
+
+        # [5] استخراج الصورة وحفظها كـ PIL Image
+        # المكتبة تعيد الصورة جاهزة في generated_images
+        return response.generated_images[0].image
 
     except Exception as e:
-        print(f"--- [GENERATOR ERROR] ---: {str(e)}")
-        return Image.open(io.BytesIO(base64.b64decode(image_b64)))
+        print(f"--- [AVATAR GENERATOR ERROR]: {str(e)} ---")
+        # في حال الخطأ نعود بالصورة الأصلية لضمان عدم توقف السيرفر
+        try:
+            image_data = base64.b64decode(image_b64)
+            return Image.open(io.BytesIO(image_data))
+        except:
+            return None
