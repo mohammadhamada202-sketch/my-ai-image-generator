@@ -5,8 +5,11 @@ import io
 import os
 
 AVATAR_STYLES = {
-    "photorealistic": "ultra-detailed professional cinematic portrait, hyper-realistic skin, 8k raw photo",
-    "anime": "high-quality anime style, vibrant cinematic colors, studio ghibli aesthetic",
+    "photorealistic": (
+        "ultra-detailed professional cinematic portrait, hyper-realistic skin texture, "
+        "8k raw photo, cinematic lighting, masterpiece"
+    ),
+    "anime": "high-quality anime style, studio ghibli aesthetic, vibrant colors",
     "3d_render": "Disney Pixar style 3D avatar, Unreal Engine 5 render",
     "pixel_art": "genuine 8-bit pixel art, retro video game sprite",
     "sketch": "fine charcoal sketch, artistic pencil strokes",
@@ -23,7 +26,7 @@ def generate_avatar(image_b64, prompt, style_key):
         # تحضير الصورة كـ Inline Data
         image_part = {"mime_type": "image/png", "data": image_b64}
 
-        # استخدام 'imagen-3' لضمان التوافق التام
+        # استخدام 'imagen-3' لضمان التوافق مع v1beta
         response = client.models.generate_content(
             model='imagen-3',
             contents=[full_instruction, image_part]
