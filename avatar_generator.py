@@ -4,14 +4,13 @@ import base64
 import io
 import os
 
-# ستايلات واقعية فائقة الدقة
 AVATAR_STYLES = {
     "photorealistic": "ultra-detailed professional cinematic portrait, hyper-realistic skin, 8k raw photo",
-    "anime": "high-quality anime style, studio ghibli aesthetic, vibrant colors",
+    "anime": "high-quality anime style, vibrant colors, studio ghibli aesthetic",
     "3d_render": "Disney Pixar style 3D avatar, Unreal Engine 5 render, cinematic lighting",
-    "pixel_art": "genuine 8-bit pixel art, retro video game sprite, clean pixels",
-    "sketch": "fine charcoal sketch, artistic pencil strokes, high contrast",
-    "abstract": "abstract digital art portrait, neon splashes, surreal masterpiece"
+    "pixel_art": "8-bit pixel art, retro video game sprite",
+    "sketch": "fine charcoal sketch, artistic pencil strokes",
+    "abstract": "abstract digital art portrait, neon splashes"
 }
 
 def generate_avatar(image_b64, prompt, style_key):
@@ -24,7 +23,7 @@ def generate_avatar(image_b64, prompt, style_key):
         # تحضير الصورة كـ Inline Data
         image_part = {"mime_type": "image/png", "data": image_b64}
 
-        # استخدام الموديل المستقر للرؤية والتوليد
+        # استخدام الموديل المستقر للتحويل
         response = client.models.generate_content(
             model='gemini-1.5-flash',
             contents=[full_instruction, image_part]
@@ -35,5 +34,4 @@ def generate_avatar(image_b64, prompt, style_key):
 
     except Exception as e:
         print(f"--- [GENERATOR ERROR] ---: {str(e)}")
-        # في حال الخطأ نرجع الصورة الأصلية لضمان عدم توقف الموقع
         return Image.open(io.BytesIO(base64.b64decode(image_b64)))
