@@ -9,7 +9,6 @@ from avatar_generator import generate_avatar
 
 def handler(job):
     try:
-        # إعداد العميل
         api_key = os.environ.get("GEMINI_API_KEY")
         client = genai.Client(api_key=api_key)
         
@@ -18,30 +17,26 @@ def handler(job):
         style = job_input.get('style', 'photorealistic')
         user_text = job_input.get('prompt', '')
 
-        # [1] الترجمة والتحسين عبر OpenAI
+        # [1] الترجمة (OpenAI) - ناجحة دائماً
         final_optimized_prompt = translate_and_optimize(user_text)
 
         # [2] المقاسات
         width, height = get_image_dimensions(job_input)
 
         if mode == 'text':
-            # [3] الحل الجذري: استخدام كائن images المخصص لمحرك Imagen 3
-            response = client.images.generate(
+            # [3] استخدام الدالة الأكثر استقراراً لضمان عدم وجود AttributeError
+            # نحدد الموديل imagen-3 ونترك للمكتبة التعامل مع الاستدعاء داخلياً
+            response = client.models.generate_content(
                 model='imagen-3.0-generate-002', 
-                prompt=f"{final_optimized_prompt}, hyper-realistic photography, 8k, extreme detail",
-                config={
-                    'aspect_ratio': f"{width}:{height}",
-                    'safety_filter_level': 'block_few',
-                    'person_generation': 'allow_all'
-                }
+                contents=f"{final_optimized_prompt}, hyper-realistic, 8k, extreme detail. Aspect ratio {width}:{height}"
             )
             
-            # استخراج الصورة مباشرة من بيانات البتات
-            image_bytes = response.generated_images[0].image.bits
+            # استخراج الصورة من البيانات المدمجة
+            image_bytes = response.candidates[0].content.parts[0].inline_data.data
             return base64.b64encode(image_bytes).decode("utf-8")
             
         else:
-            # [4] وضع الأفاتار
+            # [4] الأفاتار
             image_b64 = job_input.get('image')
             output_img = generate_avatar(image_b64, final_optimized_prompt, style)
             
