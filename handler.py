@@ -9,8 +9,10 @@ from avatar_generator import generate_avatar
 
 def handler(job):
     try:
-        # جلب المفتاح الذي يبدأ بـ AIza من إعدادات RunPod
+        # جلب مفتاح الـ API الجديد من إعدادات RunPod
         api_key = os.environ.get("GEMINI_API_KEY")
+        
+        # إعداد العميل (الافتراضي يعمل بشكل ممتاز مع مفاتيح AI Studio)
         client = genai.Client(api_key=api_key)
         
         job_input = job['input']
@@ -18,35 +20,27 @@ def handler(job):
         style = job_input.get('style', 'photorealistic')
         user_text = job_input.get('prompt', '')
 
-        # 1. ترجمة وتحسين النص عبر OpenAI (لضمان جودة الصورة)
+        # 1. ترجمة وتحسين النص (عبر OpenAI) لضمان فهم Gemini العميق للمشهد
         final_optimized_prompt = translate_and_optimize(user_text)
         print(f"Optimized Prompt: {final_optimized_prompt}")
 
-        # 2. تحديد الأبعاد
+        # 2. جلب المقاسات المطلوبة
         width, height = get_image_dimensions(job_input)
 
         if mode == 'text':
-            # 3. توليد الصورة - نستخدم 1.5-flash كونه الأسرع والأكثر استقراراً حالياً
-            # بما أن حسابك مدفوع، سيفهم الموديل أمر التوليد بدقة فائقة
-            try:
-                response = client.models.generate_content(
-                    model='gemini-1.5-flash', 
-                    contents=f"Generate a cinematic, hyper-realistic 8k photo: {final_optimized_prompt}. Aspect ratio {width}:{height}"
-                )
-                image_bytes = response.candidates[0].content.parts[0].inline_data.data
-                return base64.b64encode(image_bytes).decode("utf-8")
-            except Exception as e:
-                print(f"Flash model failed, trying Pro: {str(e)}")
-                # محاولة بديلة بموديل Pro إذا لزم الأمر
-                response = client.models.generate_content(
-                    model='gemini-1.5-pro', 
-                    contents=f"Generate a professional high-quality image: {final_optimized_prompt}"
-                )
-                image_bytes = response.candidates[0].content.parts[0].inline_data.data
-                return base64.b64encode(image_bytes).decode("utf-8")
+            # 3. توليد الصورة باستخدام الموديل الذي أكدنا وجوده في حسابك
+            # gemini-2.5-flash هو الأحدث ويدعم توليد الصور بدقة 8k
+            response = client.models.generate_content(
+                model='gemini-2.5-flash', 
+                contents=f"Generate a cinematic, hyper-realistic 8k photo: {final_optimized_prompt}. Aspect ratio {width}:{height}"
+            )
+            
+            # استخراج بيانات الصورة وتحويلها لـ Base64
+            image_bytes = response.candidates[0].content.parts[0].inline_data.data
+            return base64.b64encode(image_bytes).decode("utf-8")
             
         else:
-            # 4. وضع الأفاتار (تحويل صورة شخصية)
+            # 4. مسار الأفاتار (تحويل الصور الشخصية)
             image_b64 = job_input.get('image')
             output_img = generate_avatar(image_b64, final_optimized_prompt, style)
             
@@ -55,8 +49,9 @@ def handler(job):
             return base64.b64encode(buffered.getvalue()).decode("utf-8")
 
     except Exception as e:
-        print(f"--- [HANDLER ERROR] ---: {str(e)}")
+        # طباعة الخطأ في Logs الخاصة بـ RunPod لتسهيل تتبعه
+        print(f"--- [CRITICAL HANDLER ERROR] ---: {str(e)}")
         return {"error": str(e)}
 
-# بدء التشغيل
+# تشغيل السيرفر المخصص لـ RunPod
 runpod.serverless.start({"handler": handler})
