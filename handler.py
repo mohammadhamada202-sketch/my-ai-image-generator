@@ -7,35 +7,40 @@ from translator_helper import translate_and_optimize
 
 def handler(job):
     try:
-        # 1. إعداد المفتاح والعميل (N5UI) مع تحديد الإصدار v1 المستقر لعام 2026
+        # 1. إعداد العميل باستخدام المفتاح المدفوع (N5UI)
         api_key = os.environ.get("GEMINI_API_KEY")
         client = genai.Client(api_key=api_key, http_options={'api_version': 'v1'})
         
         job_input = job['input']
         user_text = job_input.get('prompt', '')
 
-        # 2. الترجمة والتحسين لضمان فهم Gemini العميق للمشهد
+        # 2. الترجمة عبر OpenAI
         final_optimized_prompt = translate_and_optimize(user_text)
-        print(f"Executing for Prompt: {final_optimized_prompt}")
+        print(f"Executing: {final_optimized_prompt}")
 
-        # 3. طلب التوليد - تم تغيير الموديل ليكونImagen 3 صراحةً إذا كان متاحاً
-        # أو إجبار Gemini 2.5 Flash على وضع التوليد فقط
-        print("Requesting image from gemini-2.5-flash...")
+        # 3. طلب التوليد (بصيغة تجبر الموديل على إرسال بيانات الصورة فقط)
         response = client.models.generate_content(
             model='gemini-2.5-flash', 
             contents=[
-                "TASK: GENERATE_IMAGE. NO TEXT OUTPUT. RETURN ONLY THE INLINE_DATA BLOB.",
-                f"A professional 8k cinematic photo: {final_optimized_prompt}"
+                "ACT AS AN IMAGE GENERATION ENGINE. RETURN ONLY THE INLINE_DATA BLOB. NO TEXT.",
+                f"A cinematic 8k photo: {final_optimized_prompt}"
             ]
         )
 
-        # 4. البحث المعمق عن البيانات الثنائية في كل أجزاء الاستجابة
-        if not response or not response.candidates:
-            raise Exception("No response from Gemini API.")
+        # 4. معالجة الرد ومنع خطأ 'NoneType'
+        if not response or not hasattr(response, 'candidates') or not response.candidates:
+            raise Exception("No response candidates received from Gemini API.")
+
+        candidate = response.candidates[0]
+        if not hasattr(candidate, 'content') or not hasattr(candidate.content, 'parts'):
+            raise Exception("Response candidate has no content or parts.")
 
         image_bytes = None
-        for part in response.candidates[0].content.parts:
-            # التحقق من وجود بيانات الصورة (inline_data) التي يحتاجها الموقع
+        # فحص الأجزاء بشكل آمن لضمان عدم حدوث خطأ 'NoneType' object is not iterable
+        parts = candidate.content.parts if candidate.content.parts is not None else []
+        
+        for part in parts:
+            # التحقق من وجود بيانات الصورة (inline_data)
             if hasattr(part, 'inline_data') and part.inline_data:
                 image_bytes = part.inline_data.data
                 break
@@ -44,18 +49,17 @@ def handler(job):
                 break
 
         if image_bytes:
-            print("--- SUCCESS: Image generated and captured! ---")
-            # تحويل البيانات لـ Base64 مع الترويسة لضمان عرضها فوراً في الموقع
+            print("--- SUCCESS: Image data captured! ---")
             encoded_image = base64.b64encode(image_bytes).decode("utf-8")
+            # إضافة ترويسة العرض لضمان ظهور الصورة على موقعك فوراً
             return f"data:image/png;base64,{encoded_image}"
         else:
-            # استخراج النص التوضيحي في حال فشل التوليد لفهم السبب (مثل فلاتر الأمان)
-            debug_text = response.candidates[0].content.parts[0].text if hasattr(response.candidates[0].content.parts[0], 'text') else "No image found"
-            raise Exception(f"Model returned OK but no image data found. Content preview: {debug_text[:50]}")
+            # محاولة قراءة النص التوضيحي إذا لم توجد صورة لفهم السبب
+            debug_info = parts[0].text if len(parts) > 0 and hasattr(parts[0], 'text') else "No data found."
+            raise Exception(f"Model returned OK but no image data. Info: {debug_info[:100]}")
 
     except Exception as e:
-        print(f"--- [CRITICAL HANDLER ERROR] ---: {str(e)}")
+        print(f"--- [CRITICAL ERROR] ---: {str(e)}")
         return {"error": str(e)}
 
-# تشغيل العامل (Worker) على RunPod
 runpod.serverless.start({"handler": handler})
