@@ -6,7 +6,7 @@ from translator_helper import translate_and_optimize
 
 def handler(job):
     try:
-        # إعداد المفتاح والعميل باستخدام النسخة v1 المستقرة
+        # إعداد العميل بنسخة v1 المستقرة
         api_key = os.environ.get("GEMINI_API_KEY")
         client = genai.Client(api_key=api_key, http_options={'api_version': 'v1'})
         
@@ -18,7 +18,7 @@ def handler(job):
 
         print(f"--- [STATUS] Step 2: Generating image for: {final_prompt} ---")
         
-        # تم حذف إعدادات الأمان يدوياً لتجنب الخطأ 400 INVALID_ARGUMENT
+        # طلب التوليد المباشر
         response = client.models.generate_content(
             model='gemini-2.5-flash',
             contents=[
@@ -27,34 +27,38 @@ def handler(job):
             ]
         )
 
-        print("--- [STATUS] Step 3: Extracting Image... ---")
+        print("--- [STATUS] Step 3: Extracting Image (Safe Mode)... ---")
         
-        if not response or not response.candidates:
-            raise Exception("No candidates returned from Gemini.")
-
-        image_bytes = None
-        candidate = response.candidates[0]
-        
-        # استخراج بيانات الصورة (inline_data) بشكل آمن لضمان نجاح العرض
-        if hasattr(candidate.content, 'parts') and candidate.content.parts:
-            for part in candidate.content.parts:
-                if hasattr(part, 'inline_data') and part.inline_data:
-                    image_bytes = part.inline_data.data
-                    break
-                elif hasattr(part, 'data') and part.data:
-                    image_bytes = part.data
-                    break
-
-        if image_bytes:
-            print("--- [SUCCESS] Image created successfully! ---")
-            encoded_image = base64.b64encode(image_bytes).decode("utf-8")
-            # إضافة ترويسة Base64 لضمان ظهور الصورة فوراً على موقعك
-            return f"data:image/png;base64,{encoded_image}"
+        # التحقق الآمن من وجود الرد والمرشحين (Candidates)
+        if response and hasattr(response, 'candidates') and response.candidates:
+            candidate = response.candidates[0]
+            
+            # التحقق من وجود المحتوى والأجزاء
+            if hasattr(candidate, 'content') and hasattr(candidate.content, 'parts') and candidate.content.parts:
+                image_bytes = None
+                
+                # البحث في الأجزاء عن البيانات الثنائية
+                for part in candidate.content.parts:
+                    if hasattr(part, 'inline_data') and part.inline_data:
+                        image_bytes = part.inline_data.data
+                        break
+                    elif hasattr(part, 'data') and part.data:
+                        image_bytes = part.data
+                        break
+                
+                if image_bytes:
+                    print("--- [SUCCESS] Image created! ---")
+                    encoded_image = base64.b64encode(image_bytes).decode("utf-8")
+                    return f"data:image/png;base64,{encoded_image}"
+                else:
+                    # فحص إذا كان هناك رد نصي بدلاً من الصورة
+                    text_reply = candidate.content.parts[0].text if hasattr(candidate.content.parts[0], 'text') else "No image data"
+                    print(f"--- [REJECTED] Model sent text instead of image: {text_reply} ---")
+                    return {"error": f"Model refused to generate image. Reason: {text_reply[:100]}"}
+            else:
+                return {"error": "Response candidate has no content parts."}
         else:
-            # في حال أرجع الموديل نصاً بدلاً من صورة لفهم السبب
-            debug_text = candidate.content.parts[0].text if hasattr(candidate.content.parts[0], 'text') else "Blocked"
-            print(f"--- [DEBUG] Rejection Reason: {debug_text} ---")
-            raise Exception(f"Model refused. Reason: {debug_text[:100]}")
+            return {"error": "No candidates found in Gemini response."}
 
     except Exception as e:
         print(f"--- [CRITICAL ERROR] ---: {str(e)}")
