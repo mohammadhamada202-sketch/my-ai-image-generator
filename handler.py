@@ -6,36 +6,36 @@ from translator_helper import translate_and_optimize
 
 def handler(job):
     try:
+        # إعداد المفتاح والعميل باستخدام النسخة v1 المستقرة
         api_key = os.environ.get("GEMINI_API_KEY")
-        # استخدام v1 المستقر لضمان التوافق مع حسابك في ألمانيا
         client = genai.Client(api_key=api_key, http_options={'api_version': 'v1'})
         
         job_input = job['input']
         user_text = job_input.get('prompt', '')
 
-        print("--- [THINKING] Step 1: Translating... ---")
+        print("--- [STATUS] Step 1: Optimizing prompt... ---")
         final_prompt = translate_and_optimize(user_text)
 
-        print(f"--- [THINKING] Step 2: Generating image for: {final_prompt} ---")
+        print(f"--- [STATUS] Step 2: Generating image for: {final_prompt} ---")
         
-        # طلب التوليد بدون إعدادات أمان يدوية لتجنب تعارض المسميات
+        # تم حذف إعدادات الأمان يدوياً لتجنب الخطأ 400 INVALID_ARGUMENT
         response = client.models.generate_content(
             model='gemini-2.5-flash',
             contents=[
-                "GENERATE_IMAGE: No text output. Return only the image blob.",
-                f"High-quality professional photo: {final_prompt}"
+                "TASK: GENERATE_IMAGE. NO TEXT OUTPUT. RETURN ONLY THE IMAGE DATA.",
+                f"Professional high-quality photo: {final_prompt}"
             ]
         )
 
-        print("--- [STATUS] Step 3: Processing Response... ---")
+        print("--- [STATUS] Step 3: Extracting Image... ---")
         
         if not response or not response.candidates:
-            return {"error": "No candidates returned. Please try a simpler prompt."}
+            raise Exception("No candidates returned from Gemini.")
 
         image_bytes = None
         candidate = response.candidates[0]
         
-        # البحث عن بيانات الصورة في الرد
+        # استخراج بيانات الصورة (inline_data) بشكل آمن لضمان نجاح العرض
         if hasattr(candidate.content, 'parts') and candidate.content.parts:
             for part in candidate.content.parts:
                 if hasattr(part, 'inline_data') and part.inline_data:
@@ -46,14 +46,15 @@ def handler(job):
                     break
 
         if image_bytes:
-            print("--- [SUCCESS] Image created! ---")
+            print("--- [SUCCESS] Image created successfully! ---")
             encoded_image = base64.b64encode(image_bytes).decode("utf-8")
+            # إضافة ترويسة Base64 لضمان ظهور الصورة فوراً على موقعك
             return f"data:image/png;base64,{encoded_image}"
         else:
-            # إذا أرجع الموديل نصاً بدلاً من صورة
+            # في حال أرجع الموديل نصاً بدلاً من صورة لفهم السبب
             debug_text = candidate.content.parts[0].text if hasattr(candidate.content.parts[0], 'text') else "Blocked"
-            print(f"--- [REJECTED] Reason: {debug_text} ---")
-            return {"error": f"Model refused to generate image. Reason: {debug_text[:50]}"}
+            print(f"--- [DEBUG] Rejection Reason: {debug_text} ---")
+            raise Exception(f"Model refused. Reason: {debug_text[:100]}")
 
     except Exception as e:
         print(f"--- [CRITICAL ERROR] ---: {str(e)}")
