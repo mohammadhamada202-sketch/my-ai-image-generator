@@ -7,49 +7,56 @@ from translator_helper import translate_and_optimize
 
 def handler(job):
     try:
+        # 1. جلب المفتاح المفعّل (N5UI)
         api_key = os.environ.get("GEMINI_API_KEY")
-        # استخدام v1 كما أكدت التجربة الناجحة سابقاً
         client = genai.Client(api_key=api_key, http_options={'api_version': 'v1'})
         
         job_input = job['input']
         user_text = job_input.get('prompt', '')
-        final_optimized_prompt = translate_and_optimize(user_text)
 
-        print(f"Requesting from gemini-2.5-flash with prompt: {final_optimized_prompt}")
-        
+        # 2. الترجمة (OpenAI)
+        final_optimized_prompt = translate_and_optimize(user_text)
+        print(f"Executing with Prompt: {final_optimized_prompt}")
+
+        # 3. طلب التوليد من موديل 2.5 Flash المستقر
+        # نستخدم الإعدادات السينمائية التي طلبتها في الـ Prompt
         response = client.models.generate_content(
             model='gemini-2.5-flash', 
-            contents=f"Generate a cinematic 8k photo: {final_optimized_prompt}"
+            contents=f"{final_optimized_prompt}"
         )
 
-        # --- بداية المعالجة الصارمة للرد ---
+        # 4. المستخرج الذكي (Smart Extractor) لمنع خطأ NoneType
         if not response or not response.candidates:
-            raise Exception("Empty response from model")
+            raise Exception("No candidates returned from Gemini.")
 
-        # محاولة استخراج الصورة من عدة مسارات محتملة في إصدار 2.5
         image_bytes = None
-        first_part = response.candidates[0].content.parts[0]
-
-        # المسار 1: inline_data.data (القياسي)
-        if hasattr(first_part, 'inline_data') and first_part.inline_data:
-            image_bytes = first_part.inline_data.data
-        # المسار 2: الوصول المباشر لـ data (في بعض تحديثات المكتبة)
-        elif hasattr(first_part, 'data'):
-            image_bytes = first_part.data
-        # المسار 3: فحص إذا كان هناك blob (في حال تغير البروتوكول)
-        elif hasattr(first_part, 'blob'):
-            image_bytes = first_part.blob.data
+        # في إصدارات 2026، قد يكون الرد عبارة عن قائمة من الأجزاء (Parts)
+        # نبحث في كل الأجزاء عن بيانات الصورة
+        for part in response.candidates[0].content.parts:
+            # التحقق من inline_data
+            if hasattr(part, 'inline_data') and part.inline_data:
+                image_bytes = part.inline_data.data
+                break
+            # التحقق من data مباشرة
+            elif hasattr(part, 'data') and part.data:
+                image_bytes = part.data
+                break
+            # التحقق من وجود blob
+            elif hasattr(part, 'blob') and part.blob:
+                image_bytes = part.blob.data
+                break
 
         if image_bytes:
-            print("Success! Image data found.")
+            print("--- SUCCESS: Image generated and captured! ---")
             return base64.b64encode(image_bytes).decode("utf-8")
         else:
-            # إذا لم نجد بيانات، نطبع شكل الجزء للتحليل في الـ Logs
-            print(f"Structure Debug: {dir(first_part)}")
-            raise Exception("Model returned OK but no image data was found in the response parts.")
+            # إذا أرجع الموديل نصاً (مثلاً رفض بسبب سياسات المحتوى)
+            res_text = response.candidates[0].content.parts[0].text if hasattr(response.candidates[0].content.parts[0], 'text') else "No image found"
+            raise Exception(f"Model returned OK but no image data. Reason: {res_text}")
 
     except Exception as e:
-        print(f"--- [CRITICAL HANDLER ERROR] ---: {str(e)}")
+        print(f"--- [CRITICAL ERROR] ---: {str(e)}")
         return {"error": str(e)}
 
+# تشغيل السيرفر
 runpod.serverless.start({"handler": handler})
