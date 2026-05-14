@@ -1,11 +1,9 @@
 import os
-import io
 import uuid
 import subprocess
 import sys
-from PIL import Image
 
-# محاولة استيراد مكتبة supabase وتثبيتها تلقائياً
+# التأكد من وجود مكتبة supabase
 try:
     from supabase import create_client
 except ImportError:
@@ -24,32 +22,29 @@ BUCKET_NAME = "MyFirstImagesTest1"
 
 # تهيئة عميل Supabase
 if not SUPABASE_URL or not SUPABASE_KEY:
-    print("--- [ERROR] Supabase credentials missing from environment! ---")
+    print("--- [ERROR] Supabase credentials missing! ---")
 else:
     supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 def handler(job):
     try:
-        # تأكيد إصدار الكود في السجلات
-        print("--- [SYSTEM] STARTING HANDLER VERSION 3.0 ---")
+        # رقم إصدار جديد للتأكد من التحديث في الـ Logs
+        print("--- [SYSTEM] STARTING HANDLER V4.0 - DIRECT UPLOAD ---")
         
-        # 1. تهيئة عميل Gemini
         client = genai.Client(api_key=GEMINI_API_KEY, http_options={'api_version': 'v1'})
-        
         job_input = job['input']
         user_text = job_input.get('prompt', 'A beautiful landscape')
 
-        # 2. الترجمة وتحسين الوصف
-        print(f"--- [STATUS] Optimizing prompt for: {user_text} ---")
-        final_prompt = translate_and_optimize(user_text) [cite: 32]
+        # 1. تحسين الوصف
+        final_prompt = translate_and_optimize(user_text)
         print(f"--- [DEBUG] Final Prompt: {final_prompt} ---")
 
-        # 3. توليد الصورة عبر Gemini
-        print("--- [STATUS] Calling Gemini to generate image... ---")
+        # 2. توليد الصورة
+        print("--- [STATUS] Calling Gemini... ---")
         response = client.models.generate_content(
             model='gemini-2.5-flash',
             contents=[
-                "TASK: GENERATE_IMAGE. NO TEXT OUTPUT. RETURN ONLY THE IMAGE DATA.",
+                "TASK: GENERATE_IMAGE. NO TEXT OUTPUT.",
                 f"Professional high-quality 4K photo: {final_prompt}"
             ]
         )
@@ -57,56 +52,36 @@ def handler(job):
         image_bytes = None
         if response and response.candidates:
             candidate = response.candidates[0]
-            if candidate.content.parts:
-                for part in candidate.content.parts:
-                    if hasattr(part, 'inline_data') and part.inline_data:
-                        image_bytes = part.inline_data.data
-                        break
-                    elif hasattr(part, 'data') and part.data:
-                        image_bytes = part.data
-                        break
+            for part in candidate.content.parts:
+                if hasattr(part, 'inline_data') and part.inline_data:
+                    image_bytes = part.inline_data.data
+                    break
+                elif hasattr(part, 'data') and part.data:
+                    image_bytes = part.data
+                    break
 
         if not image_bytes:
-            print("--- [ERROR] No image data found in Gemini response ---")
-            return {"error": "Failed to receive image data from Gemini."}
+            return {"error": "No image data from Gemini."}
 
-        # 4. معالجة الصورة وتحويلها إلى JPG
-        print("--- [STATUS] Converting PNG to JPG for compatibility... ---")
-        img = Image.open(io.BytesIO(image_bytes))
-        
-        if img.mode in ("RGBA", "P"):
-            img = img.convert("RGB")
-        
-        output_buffer = io.BytesIO()
-        img.save(output_buffer, format="JPEG", quality=90)
-        jpg_data = output_buffer.getvalue()
-
-        # 5. الرفع إلى Supabase
-        file_name = f"smartgen_{uuid.uuid4()}.jpg"
-        print(f"--- [STATUS] Uploading {file_name} to Supabase Bucket: {BUCKET_NAME} ---")
+        # 3. الرفع المباشر (بدون تحويل)
+        file_name = f"smartgen_{uuid.uuid4()}.png" # Gemini يعيد PNG افتراضياً
+        print(f"--- [STATUS] Direct Uploading {file_name} to Supabase... ---")
         
         storage = supabase.storage.from_(BUCKET_NAME)
-        upload_result = storage.upload(
+        # نرسل image_bytes كما هي تماماً
+        storage.upload(
             path=file_name,
-            file=jpg_data,
-            file_options={"content-type": "image/jpeg"}
+            file=image_bytes,
+            file_options={"content-type": "image/png"}
         )
-        print(f"--- [DEBUG] Upload Result: {upload_result} ---")
 
-        # 6. الحصول على الرابط العام
         image_url = storage.get_public_url(file_name)
         print(f"--- [SUCCESS] Image live at: {image_url} ---")
 
-        return {
-            "image_url": image_url,
-            "status": "success",
-            "prompt_used": final_prompt
-        }
+        return {"image_url": image_url, "status": "success"}
 
     except Exception as e:
-        error_msg = f"Critical Error: {str(e)}"
-        print(f"--- [ERROR] {error_msg} ---")
-        return {"error": error_msg}
+        print(f"--- [ERROR] {str(e)} ---")
+        return {"error": str(e)}
 
-# بدء تشغيل السيرفر
 runpod.serverless.start({"handler": handler})
