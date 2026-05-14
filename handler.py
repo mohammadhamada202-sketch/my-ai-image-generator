@@ -5,7 +5,7 @@ import subprocess
 import sys
 from PIL import Image
 
-# محاولة استيراد مكتبة supabase وتثبيتها إذا لم تكن موجودة
+# محاولة استيراد مكتبة supabase وتثبيتها تلقائياً
 try:
     from supabase import create_client
 except ImportError:
@@ -17,7 +17,6 @@ from google import genai
 from translator_helper import translate_and_optimize
 
 # --- إعدادات الاتصال ---
-# تأكد من وضع هذه المتغيرات في Environment Variables في RunPod
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "").strip()
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "").strip()
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "").strip()
@@ -25,12 +24,15 @@ BUCKET_NAME = "MyFirstImagesTest1"
 
 # تهيئة عميل Supabase
 if not SUPABASE_URL or not SUPABASE_KEY:
-    print("--- [ERROR] Supabase credentials missing! ---")
+    print("--- [ERROR] Supabase credentials missing from environment! ---")
 else:
     supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 def handler(job):
     try:
+        # تأكيد إصدار الكود في السجلات
+        print("--- [SYSTEM] STARTING HANDLER VERSION 3.0 ---")
+        
         # 1. تهيئة عميل Gemini
         client = genai.Client(api_key=GEMINI_API_KEY, http_options={'api_version': 'v1'})
         
@@ -39,13 +41,13 @@ def handler(job):
 
         # 2. الترجمة وتحسين الوصف
         print(f"--- [STATUS] Optimizing prompt for: {user_text} ---")
-        final_prompt = translate_and_optimize(user_text) # [cite: 13]
+        final_prompt = translate_and_optimize(user_text) [cite: 32]
         print(f"--- [DEBUG] Final Prompt: {final_prompt} ---")
 
         # 3. توليد الصورة عبر Gemini
         print("--- [STATUS] Calling Gemini to generate image... ---")
         response = client.models.generate_content(
-            model='gemini-2.5-flash', # 
+            model='gemini-2.5-flash',
             contents=[
                 "TASK: GENERATE_IMAGE. NO TEXT OUTPUT. RETURN ONLY THE IMAGE DATA.",
                 f"Professional high-quality 4K photo: {final_prompt}"
@@ -65,13 +67,13 @@ def handler(job):
                         break
 
         if not image_bytes:
+            print("--- [ERROR] No image data found in Gemini response ---")
             return {"error": "Failed to receive image data from Gemini."}
 
         # 4. معالجة الصورة وتحويلها إلى JPG
         print("--- [STATUS] Converting PNG to JPG for compatibility... ---")
         img = Image.open(io.BytesIO(image_bytes))
         
-        # تحويل لـ RGB لأن JPG لا يدعم الشفافية
         if img.mode in ("RGBA", "P"):
             img = img.convert("RGB")
         
@@ -81,14 +83,15 @@ def handler(job):
 
         # 5. الرفع إلى Supabase
         file_name = f"smartgen_{uuid.uuid4()}.jpg"
-        print(f"--- [STATUS] Uploading {file_name} to Supabase... ---")
+        print(f"--- [STATUS] Uploading {file_name} to Supabase Bucket: {BUCKET_NAME} ---")
         
         storage = supabase.storage.from_(BUCKET_NAME)
-        storage.upload(
+        upload_result = storage.upload(
             path=file_name,
             file=jpg_data,
             file_options={"content-type": "image/jpeg"}
         )
+        print(f"--- [DEBUG] Upload Result: {upload_result} ---")
 
         # 6. الحصول على الرابط العام
         image_url = storage.get_public_url(file_name)
