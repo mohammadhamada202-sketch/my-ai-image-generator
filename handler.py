@@ -37,15 +37,15 @@ def handler(job):
         job_input = job['input']
         user_text = job_input.get('prompt', 'A beautiful landscape')
 
-        # 2. الترجمة وتحسين الوصف (Prompt Engineering)
+        # 2. الترجمة وتحسين الوصف
         print(f"--- [STATUS] Optimizing prompt for: {user_text} ---")
-        final_prompt = translate_and_optimize(user_text)
+        final_prompt = translate_and_optimize(user_text) # [cite: 13]
         print(f"--- [DEBUG] Final Prompt: {final_prompt} ---")
 
         # 3. توليد الصورة عبر Gemini
         print("--- [STATUS] Calling Gemini to generate image... ---")
         response = client.models.generate_content(
-            model='gemini-2.5-flash',
+            model='gemini-2.5-flash', # 
             contents=[
                 "TASK: GENERATE_IMAGE. NO TEXT OUTPUT. RETURN ONLY THE IMAGE DATA.",
                 f"Professional high-quality 4K photo: {final_prompt}"
@@ -84,7 +84,7 @@ def handler(job):
         print(f"--- [STATUS] Uploading {file_name} to Supabase... ---")
         
         storage = supabase.storage.from_(BUCKET_NAME)
-        upload_response = storage.upload(
+        storage.upload(
             path=file_name,
             file=jpg_data,
             file_options={"content-type": "image/jpeg"}
