@@ -1,20 +1,35 @@
-import runpod
+import subprocess
+import sys
 import os
-import uuid  # لتوليد أسماء فريدة للصور
+import uuid
+import base64
+
+# --- [الخطوة الاحتياطية] تثبيت مكتبة Supabase تلقائياً إذا لم تكن موجودة ---
+try:
+    from supabase import create_client
+except ImportError:
+    print("--- [INFO] Supabase library not found. Installing now... ---")
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "supabase"])
+    from supabase import create_client
+
+import runpod
 from google import genai
-from supabase import create_client # مكتبة الربط مع سوبابيس
 from translator_helper import translate_and_optimize
 
-# إعداد بيانات الربط مع Supabase (يفضل وضعها في Environment Variables في RunPod)
-SUPABASE_URL = os.environ.get("SUPABASE_URL") # من Project Settings -> API
-SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY") # أو الـ anon key
+# --- [إعدادات البيئة] تأكد من إضافتها في RunPod Dashboard ---
+SUPABASE_URL = os.environ.get("SUPABASE_URL")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY")  # استخدم الـ Secret Key لضمان الصلاحيات
 BUCKET_NAME = "MyFirstImagesTest1"
 
-# إنشاء العميل
-supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+# تهيئة عميل Supabase
+if SUPABASE_URL and SUPABASE_KEY:
+    supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+else:
+    print("--- [WARNING] Supabase credentials missing! ---")
 
 def handler(job):
     try:
+        # إعداد عميل Gemini
         api_key = os.environ.get("GEMINI_API_KEY")
         client = genai.Client(api_key=api_key, http_options={'api_version': 'v1'})
         
@@ -39,6 +54,7 @@ def handler(job):
             if hasattr(candidate, 'content') and candidate.content.parts:
                 image_bytes = None
                 
+                # البحث عن بيانات الصورة في الرد
                 for part in candidate.content.parts:
                     if hasattr(part, 'inline_data') and part.inline_data:
                         image_bytes = part.inline_data.data
@@ -48,12 +64,12 @@ def handler(job):
                         break
                 
                 if image_bytes:
-                    print("--- [STATUS] Step 3: Uploading to Supabase... ---")
+                    print("--- [STATUS] Step 3: Uploading to Supabase Storage... ---")
                     
-                    # 1. إنشاء اسم فريد للصورة لمنع التكرار
-                    file_name = f"gen_{uuid.uuid4()}.png"
+                    # إنشاء اسم ملف فريد (مثلاً: gen_123e4567.png)
+                    file_name = f"smartgen_{uuid.uuid4()}.png"
                     
-                    # 2. عملية الرفع لـ Supabase
+                    # رفع الصورة إلى البكت المخصص
                     storage = supabase.storage.from_(BUCKET_NAME)
                     storage.upload(
                         path=file_name,
@@ -61,21 +77,22 @@ def handler(job):
                         file_options={"content-type": "image/png"}
                     )
                     
-                    # 3. استخراج الرابط العام (Public URL)
+                    # الحصول على الرابط المباشر
                     image_url = storage.get_public_url(file_name)
                     
                     print(f"--- [SUCCESS] Image live at: {image_url} ---")
                     
-                    # نرجع الرابط فقط، المتصفح سيفرح بهذا الرد الصغير!
+                    # إرجاع الرابط فقط لتجنب تعليق المتصفح في v0
                     return {"image_url": image_url}
                 
                 else:
                     return {"error": "Model sent text instead of image data."}
         
-        return {"error": "Failed to extract image from Gemini response."}
+        return {"error": "No image data found in response."}
 
     except Exception as e:
         print(f"--- [CRITICAL ERROR] ---: {str(e)}")
         return {"error": str(e)}
 
+# تشغيل السيرفر
 runpod.serverless.start({"handler": handler})
