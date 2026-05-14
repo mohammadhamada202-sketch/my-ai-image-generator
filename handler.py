@@ -4,15 +4,21 @@ import subprocess
 import sys
 import time
 
-# 1. التأكد من تثبيت النسخة الصحيحة من المكتبة
-try:
-    from google import genai
-    from supabase import create_client
-except ImportError:
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "google-genai supabase"])
-    from google import genai
-    from supabase import create_client
+# 1. تحديث إجباري للمكتبات لأحدث إصدار يدعم Imagen 3
+def install_dependencies():
+    print("--- [SYSTEM] Force updating libraries... ---")
+    try:
+        # نقوم بتحديث المكتبة لأحدث إصدار --upgrade
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "--upgrade", "google-genai", "supabase"])
+        print("--- [SYSTEM] Libraries updated successfully ---")
+    except Exception as e:
+        print(f"--- [WARNING] Update failed but continuing: {e} ---")
 
+# تنفيذ التحديث عند تشغيل الملف لأول مرة
+install_dependencies()
+
+from google import genai
+from supabase import create_client
 import runpod
 from translator_helper import translate_and_optimize
 
@@ -24,54 +30,63 @@ BUCKET_NAME = "MyFirstImagesTest1"
 
 def handler(job):
     try:
-        print("--- [START] HANDLER V7.1 - FIXING IMAGEN FUNCTION CALL ---")
+        # وسم الإصدار الجديد
+        print("--- [START] HANDLER V7.2 - FIXING ATTRIBUTE ERROR ---")
         
-        # تهيئة العميل
+        # تهيئة العميل مع تحديد الإصدار v1
         client = genai.Client(api_key=GEMINI_API_KEY, http_options={'api_version': 'v1'})
         
         job_input = job.get('input', {})
         user_text = job_input.get('prompt', 'Apple')
         
         # تحسين الوصف
+        print(f"--- [STEP 1] Optimizing prompt for: {user_text} ---")
         final_prompt = translate_and_optimize(user_text)
         print(f"--- [DEBUG] Final Prompt: {final_prompt} ---")
 
-        # 2. طلب الصورة (الطريقة البديلة المتوافقة)
-        print("--- [STEP] Requesting Image from Imagen 3... ---")
+        # 2. طلب الصورة (محمي بـ Diagnostic لغرض الفحص)
+        print("--- [STEP 2] Requesting Image from Imagen 3... ---")
         
-        # في بعض النسخ، يتم الوصول للموديل عبر التسمية الكاملة مباشرة
+        # فحص وجود الدالة قبل استدعائها لتجنب الانهيار الصامت
+        if not hasattr(client.models, 'generate_image'):
+            available = [m for m in dir(client.models) if not m.startswith('_')]
+            print(f"--- [CRITICAL] Library still outdated! Available methods: {available} ---")
+            return {"error": f"Outdated library. Methods found: {available}"}
+
         response = client.models.generate_image(
             model='imagen-3.0-generate-001',
-            prompt=final_prompt,
-            config=None # يمكنك إضافة إعدادات إضافية هنا لاحقاً
+            prompt=final_prompt
         )
 
         # 3. استخراج البيانات
-        # ملاحظة: إذا استمر الخطأ، سنقوم بتغيير السطر أدناه لاستخدام الدالة الخام
-        image_bytes = response.generated_images[0].image_bytes
-        
-        if not image_bytes:
-            raise Exception("No image bytes returned from Imagen")
-
-        print(f"--- [SUCCESS] Image size: {len(image_bytes)/1024:.2f} KB ---")
+        if response and response.generated_images:
+            image_bytes = response.generated_images[0].image_bytes
+            print(f"--- [SUCCESS] Pixels received: {len(image_bytes)/1024:.2f} KB ---")
+        else:
+            print("--- [FAILED] Imagen returned no data ---")
+            return {"error": "No image data returned"}
 
         # 4. الرفع لـ Supabase
-        sb = create_client(SUPABASE_URL, SUPABASE_KEY)
-        file_name = f"final_{int(time.time())}.png"
+        print("--- [STEP 3] Uploading to Supabase... ---")
+        sb_client = create_client(SUPABASE_URL, SUPABASE_KEY)
+        file_name = f"final_v7_{int(time.time())}.png"
         
-        storage = sb.storage.from_(BUCKET_NAME)
-        storage.upload(path=file_name, file=image_bytes, file_options={"content-type": "image/png"})
+        storage = sb_client.storage.from_(BUCKET_NAME)
+        storage.upload(
+            path=file_name,
+            file=image_bytes,
+            file_options={"content-type": "image/png"}
+        )
 
-        url = storage.get_public_url(file_name)
-        print(f"--- [DONE] Image live at: {url} ---")
+        image_url = storage.get_public_url(file_name)
+        print(f"--- [DONE] URL: {image_url} ---")
 
-        return {"image_url": url, "status": "success"}
+        return {"image_url": image_url, "status": "success"}
 
     except Exception as e:
-        # إذا فشل التوليد بسبب الدالة، سنطبع قائمة الدوال المتاحة لنعرف الاسم الصحيح
-        available_methods = [method for method in dir(client.models) if not method.startswith('_')]
-        error_msg = f"Error: {str(e)} | Available methods: {available_methods}"
-        print(f"--- [FATAL] {error_msg} ---")
+        error_msg = f"Fatal Error: {str(e)}"
+        print(f"--- [ERROR] {error_msg} ---")
         return {"error": error_msg}
 
+# إطلاق السيرفر
 runpod.serverless.start({"handler": handler})
