@@ -1,102 +1,76 @@
 import os
 import uuid
-import subprocess
 import sys
+import runpod
 import time
 
-# تأكيد استيراد المكتبات
-try:
-    from supabase import create_client
-    print("--- [DIAGNOSTIC] Supabase library loaded ---")
-except ImportError:
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "supabase"])
-    from supabase import create_client
-
-import runpod
-from google import genai
-from translator_helper import translate_and_optimize
-
-# --- إعدادات الاتصال ---
-SUPABASE_URL = os.environ.get("SUPABASE_URL", "").strip()
-SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "").strip()
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "").strip()
-BUCKET_NAME = "MyFirstImagesTest1"
-
+# قمنا بوضع الاستيراد داخل الدالة لضمان صيد أي خطأ في المكتبات
 def handler(job):
-    start_time = time.time()
+    print("--- [START] HANDLER V6.0 - CHECKING WHY NO CREDIT IS USED ---")
     try:
-        # 1. وسم الإصدار (هذا أهم سطر الآن)
-        print("--- [START] HANDLER VERSION 5.0 - DIAGNOSTIC MODE ACTIVE ---")
-        
-        # فحص وجود المفاتيح
-        if not SUPABASE_URL or not SUPABASE_KEY:
-            print("--- [CRITICAL] SUPABASE_URL or KEY is EMPTY in environment variables! ---")
-            return {"error": "Missing Supabase Credentials"}
+        # 1. فحص المكتبات (هل هي مثبتة أصلاً؟)
+        try:
+            from google import genai
+            from supabase import create_client
+            print("--- [DEBUG] Libraries loaded successfully ---")
+        except Exception as lib_err:
+            print(f"--- [CRITICAL] Library Import Failed: {str(lib_err)} ---")
+            return {"error": f"Import error: {str(lib_err)}"}
 
-        # 2. فحص الاتصال بـ Gemini
-        print("--- [STEP 1] Initializing Gemini Client... ---")
-        client = genai.Client(api_key=GEMINI_API_KEY, http_options={'api_version': 'v1'})
+        # 2. فحص المفاتيح
+        api_key = os.environ.get("GEMINI_API_KEY", "").strip()
+        if not api_key:
+            print("--- [CRITICAL] GEMINI_API_KEY IS EMPTY! ---")
+            return {"error": "API Key Missing"}
+
+        # 3. محاولة الاتصال بـ Gemini (هنا تبدأ التكلفة)
+        print("--- [STEP] Initializing Gemini Client... ---")
+        client = genai.Client(api_key=api_key, http_options={'api_version': 'v1'})
         
         job_input = job.get('input', {})
-        user_text = job_input.get('prompt', 'Apple')
+        prompt = job_input.get('prompt', 'Apple')
+
+        print(f"--- [STEP] Requesting Image for prompt: {prompt} ---")
         
-        print(f"--- [STEP 2] Optimizing prompt: {user_text} ---")
-        final_prompt = translate_and_optimize(user_text)
-        print(f"--- [DEBUG] Final Optimized Prompt: {final_prompt} ---")
+        # محاولة التوليد مع صيد الخطأ الخاص بجوجل
+        try:
+            response = client.models.generate_content(
+                model='gemini-2.5-flash',
+                contents=[f"High-quality 4K image of {prompt}"]
+            )
+            print("--- [DEBUG] Gemini API call finished ---")
+        except Exception as gemini_err:
+            print(f"--- [FAILED] Gemini API Refused the call: {str(gemini_err)} ---")
+            return {"error": f"Gemini Error: {str(gemini_err)}"}
 
-        # 3. توليد الصورة وفحص حجم البيانات
-        print("--- [STEP 3] Requesting Image from Gemini 2.5 Flash... ---")
-        response = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=[f"Professional high-quality photo: {final_prompt}"]
-        )
-
+        # 4. فحص هل وصلت بيانات فعلاً؟
         image_bytes = None
         if response and response.candidates:
-            candidate = response.candidates[0]
-            for part in candidate.content.parts:
-                if hasattr(part, 'inline_data') and part.inline_data:
-                    image_bytes = part.inline_data.data
-                elif hasattr(part, 'data') and part.data:
-                    image_bytes = part.data
+            for part in response.candidates[0].content.parts:
+                if hasattr(part, 'inline_data'): image_bytes = part.inline_data.data
+                elif hasattr(part, 'data'): image_bytes = part.data
         
         if not image_bytes:
-            print("--- [FAILED] Gemini returned success but NO IMAGE BYTES found ---")
-            return {"error": "Empty image data from Gemini"}
-        
-        data_size = len(image_bytes) / 1024
-        print(f"--- [SUCCESS] Image received. Size: {data_size:.2f} KB ---")
+            print("--- [WARNING] Gemini responded OK but sent NO IMAGE DATA ---")
+            return {"error": "No image data returned"}
 
-        # 4. محاولة الاتصال والرفع لـ Supabase
-        print(f"--- [STEP 4] Connecting to Supabase at: {SUPABASE_URL} ---")
-        sb_client = create_client(SUPABASE_URL, SUPABASE_KEY)
+        print(f"--- [SUCCESS] Image Data Received! Size: {len(image_bytes)} bytes ---")
         
-        file_name = f"diag_{int(time.time())}_{uuid.uuid4().hex[:6]}.png"
-        print(f"--- [STEP 5] Attempting UPLOAD to bucket: {BUCKET_NAME} as {file_name} ---")
+        # 5. الرفع السريع لـ Supabase
+        sb_url = os.environ.get("SUPABASE_URL", "").strip()
+        sb_key = os.environ.get("SUPABASE_KEY", "").strip()
+        sb = create_client(sb_url, sb_key)
         
-        storage = sb_client.storage.from_(BUCKET_NAME)
+        file_name = f"final_test_{uuid.uuid4().hex[:5]}.png"
+        sb.storage.from_("MyFirstImagesTest1").upload(file_name, image_bytes)
         
-        # محاولة الرفع مع صيد الخطأ بدقة
-        try:
-            upload_response = storage.upload(
-                path=file_name,
-                file=image_bytes,
-                file_options={"content-type": "image/png"}
-            )
-            print(f"--- [STEP 6] Upload process finished. Response: {upload_response} ---")
-        except Exception as upload_err:
-            print(f"--- [FAILED] Supabase UPLOAD error: {str(upload_err)} ---")
-            raise upload_err
+        url = sb.storage.from_("MyFirstImagesTest1").get_public_url(file_name)
+        print(f"--- [DONE] Image Uploaded to: {url} ---")
+        
+        return {"url": url, "status": "success"}
 
-        # 5. استخراج الرابط
-        image_url = storage.get_public_url(file_name)
-        end_time = time.time()
-        print(f"--- [DONE] Total Time: {end_time - start_time:.2f}s | URL: {image_url} ---")
-
-        return {"image_url": image_url, "status": "success"}
-
-    except Exception as e:
-        print(f"--- [FATAL ERROR] {str(e)} ---")
-        return {"error": str(e)}
+    except Exception as fatal_e:
+        print(f"--- [FATAL] Unexpected Crash: {str(fatal_e)} ---")
+        return {"error": str(fatal_e)}
 
 runpod.serverless.start({"handler": handler})
