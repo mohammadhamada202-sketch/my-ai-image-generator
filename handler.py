@@ -16,7 +16,9 @@ def handler(job):
     try:
         print("--- [START] HANDLER V8.0 - FINAL SUCCESS VERSION ---")
         
+        # تهيئة العميل
         client = genai.Client(api_key=GEMINI_API_KEY, http_options={'api_version': 'v1'})
+        
         job_input = job.get('input', {})
         user_text = job_input.get('prompt', 'Apple')
         
@@ -24,16 +26,16 @@ def handler(job):
         final_prompt = translate_and_optimize(user_text)
         print(f"--- [DEBUG] Final Prompt: {final_prompt} ---")
 
-        # 2. طلب الصورة من Imagen 3 (باستخدام الدالة الصحيحة المكتشفة)
+        # 2. طلب الصورة من Imagen 3 (باستخدام الدالة الصحيحة المكتشفة s)
         print("--- [STEP] Requesting Image from Imagen 3 Artist... ---")
         
-        # استخدمنا هنا 'generate_images' كما ظهرت في الـ Logs الخاصة بك
+        # هنا استخدمنا 'generate_images' كما ظهرت في الـ Logs الخاصة بك
         response = client.models.generate_images(
             model='imagen-3.0-generate-001',
             prompt=final_prompt
         )
 
-        # 3. استخراج البكسلات (Imagen 3 يعيد قائمة من الصور)
+        # 3. استخراج البكسلات
         image_bytes = None
         if response and hasattr(response, 'generated_images') and response.generated_images:
             image_bytes = response.generated_images[0].image_bytes
@@ -42,7 +44,7 @@ def handler(job):
             print("--- [FAILED] No image bytes in response ---")
             return {"error": "Imagen returned success but no data"}
 
-        # 4. الرفع لـ Supabase
+        # 4. الرفع المباشر لـ Supabase
         print("--- [STEP] Uploading to Supabase... ---")
         sb_client = create_client(SUPABASE_URL, SUPABASE_KEY)
         file_name = f"success_{int(time.time())}_{uuid.uuid4().hex[:4]}.png"
