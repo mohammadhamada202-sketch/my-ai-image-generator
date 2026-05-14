@@ -1,25 +1,9 @@
 import os
 import uuid
-import subprocess
-import sys
 import time
-
-# 1. تحديث إجباري للمكتبات لأحدث إصدار يدعم Imagen 3
-def install_dependencies():
-    print("--- [SYSTEM] Force updating libraries... ---")
-    try:
-        # نقوم بتحديث المكتبة لأحدث إصدار --upgrade
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "--upgrade", "google-genai", "supabase"])
-        print("--- [SYSTEM] Libraries updated successfully ---")
-    except Exception as e:
-        print(f"--- [WARNING] Update failed but continuing: {e} ---")
-
-# تنفيذ التحديث عند تشغيل الملف لأول مرة
-install_dependencies()
-
+import runpod
 from google import genai
 from supabase import create_client
-import runpod
 from translator_helper import translate_and_optimize
 
 # --- إعدادات الاتصال ---
@@ -30,63 +14,49 @@ BUCKET_NAME = "MyFirstImagesTest1"
 
 def handler(job):
     try:
-        # وسم الإصدار الجديد
-        print("--- [START] HANDLER V7.2 - FIXING ATTRIBUTE ERROR ---")
+        print("--- [START] HANDLER V8.0 - FINAL SUCCESS VERSION ---")
         
-        # تهيئة العميل مع تحديد الإصدار v1
         client = genai.Client(api_key=GEMINI_API_KEY, http_options={'api_version': 'v1'})
-        
         job_input = job.get('input', {})
         user_text = job_input.get('prompt', 'Apple')
         
-        # تحسين الوصف
-        print(f"--- [STEP 1] Optimizing prompt for: {user_text} ---")
+        # 1. ترجمة وتحسين الوصف
         final_prompt = translate_and_optimize(user_text)
         print(f"--- [DEBUG] Final Prompt: {final_prompt} ---")
 
-        # 2. طلب الصورة (محمي بـ Diagnostic لغرض الفحص)
-        print("--- [STEP 2] Requesting Image from Imagen 3... ---")
+        # 2. طلب الصورة من Imagen 3 (باستخدام الدالة الصحيحة المكتشفة)
+        print("--- [STEP] Requesting Image from Imagen 3 Artist... ---")
         
-        # فحص وجود الدالة قبل استدعائها لتجنب الانهيار الصامت
-        if not hasattr(client.models, 'generate_image'):
-            available = [m for m in dir(client.models) if not m.startswith('_')]
-            print(f"--- [CRITICAL] Library still outdated! Available methods: {available} ---")
-            return {"error": f"Outdated library. Methods found: {available}"}
-
-        response = client.models.generate_image(
+        # استخدمنا هنا 'generate_images' كما ظهرت في الـ Logs الخاصة بك
+        response = client.models.generate_images(
             model='imagen-3.0-generate-001',
             prompt=final_prompt
         )
 
-        # 3. استخراج البيانات
-        if response and response.generated_images:
+        # 3. استخراج البكسلات (Imagen 3 يعيد قائمة من الصور)
+        image_bytes = None
+        if response and hasattr(response, 'generated_images') and response.generated_images:
             image_bytes = response.generated_images[0].image_bytes
-            print(f"--- [SUCCESS] Pixels received: {len(image_bytes)/1024:.2f} KB ---")
+            print(f"--- [SUCCESS] Real Image Received: {len(image_bytes)/1024:.2f} KB ---")
         else:
-            print("--- [FAILED] Imagen returned no data ---")
-            return {"error": "No image data returned"}
+            print("--- [FAILED] No image bytes in response ---")
+            return {"error": "Imagen returned success but no data"}
 
         # 4. الرفع لـ Supabase
-        print("--- [STEP 3] Uploading to Supabase... ---")
+        print("--- [STEP] Uploading to Supabase... ---")
         sb_client = create_client(SUPABASE_URL, SUPABASE_KEY)
-        file_name = f"final_v7_{int(time.time())}.png"
+        file_name = f"success_{int(time.time())}_{uuid.uuid4().hex[:4]}.png"
         
         storage = sb_client.storage.from_(BUCKET_NAME)
-        storage.upload(
-            path=file_name,
-            file=image_bytes,
-            file_options={"content-type": "image/png"}
-        )
+        storage.upload(path=file_name, file=image_bytes, file_options={"content-type": "image/png"})
 
-        image_url = storage.get_public_url(file_name)
-        print(f"--- [DONE] URL: {image_url} ---")
+        url = storage.get_public_url(file_name)
+        print(f"--- [DONE] SUCCESS! URL: {url} ---")
 
-        return {"image_url": image_url, "status": "success"}
+        return {"image_url": url, "status": "success"}
 
     except Exception as e:
-        error_msg = f"Fatal Error: {str(e)}"
-        print(f"--- [ERROR] {error_msg} ---")
-        return {"error": error_msg}
+        print(f"--- [FATAL ERROR] {str(e)} ---")
+        return {"error": str(e)}
 
-# إطلاق السيرفر
 runpod.serverless.start({"handler": handler})
