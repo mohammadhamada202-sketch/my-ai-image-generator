@@ -4,7 +4,7 @@ import subprocess
 import sys
 import time
 
-# التأكد من تحميل المكتبات اللازمة للرفع والذكاء الاصطناعي
+# التأكد من المكتبات
 try:
     from supabase import create_client
     from google import genai
@@ -23,67 +23,47 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "").strip()
 BUCKET_NAME = "MyFirstImagesTest1"
 
 def handler(job):
-    start_time = time.time()
     try:
-        # 1. وسم الإصدار الجديد للتأكد من التحديث
-        print("--- [START] NUCLEAR HANDLER V6.1 - FORCE IMAGE MODE ---")
+        print("--- [START] HANDLER V7.0 - SWITCHING TO IMAGEN (REAL ARTIST) ---")
         
         client = genai.Client(api_key=GEMINI_API_KEY, http_options={'api_version': 'v1'})
         job_input = job.get('input', {})
         user_text = job_input.get('prompt', 'Apple')
         
-        # 2. ترجمة وتحسين الوصف ليكون قابلاً للتوليد كصورة
-        print(f"--- [STEP 1] Optimizing prompt: {user_text} ---")
+        # 1. تحسين الوصف
         final_prompt = translate_and_optimize(user_text)
-        print(f"--- [DEBUG] Final Prompt: {final_prompt} ---")
+        print(f"--- [DEBUG] Prompt: {final_prompt} ---")
 
-        # 3. طلب الصورة بأوامر "صارمة" تجبر المحرك على الرسم
-        print("--- [STEP 2] Requesting Image (FORCE_IMAGE_ONLY) ---")
-        response = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=[
-                "IMPORTANT: YOU ARE AN IMAGE GENERATION ENGINE. DO NOT RESPOND WITH TEXT.",
-                "TASK: GENERATE_IMAGE_NOW",
-                f"High-quality 4K photorealistic image of: {final_prompt}",
-                "FORMAT: RETURN_IMAGE_BYTES_ONLY"
-            ]
+        # 2. توليد الصورة باستخدام Imagen (وليس Gemini Flash)
+        print("--- [STEP] Requesting Image from Imagen 3... ---")
+        
+        # ملاحظة: نستخدم generate_image هنا
+        response = client.models.generate_image(
+            model='imagen-3.0-generate-001', # هذا هو الموديل الذي يرسم فعلياً
+            prompt=final_prompt
         )
 
-        # 4. استخراج البيانات وفحصها (لماذا فشل التوليد؟)
+        # 3. استخراج بيانات الصورة
         image_bytes = None
-        if response and response.candidates:
-            candidate = response.candidates[0]
-            # البحث في أجزاء الرد عن بيانات الصورة (Pixel Data)
-            for part in candidate.content.parts:
-                if hasattr(part, 'inline_data') and part.inline_data:
-                    image_bytes = part.inline_data.data
-                    break
-                elif hasattr(part, 'data') and part.data:
-                    image_bytes = part.data
-                    break
+        if response and response.generated_images:
+            # Imagen يعيد الصورة في قائمة generated_images
+            image_bytes = response.generated_images[0].image_bytes
         
         if not image_bytes:
-            # إذا فشل التوليد كصورة، نطبع الرد النصي لتعرف السبب (رفض أمني أو سوء فهم)
-            gemini_text = response.text if hasattr(response, 'text') else "No Text Returned"
-            print(f"--- [FAILED] Gemini returned text instead of bytes. Message: {gemini_text} ---")
-            return {"error": "Gemini sent text instead of an image. Check Logs for reason."}
+            print("--- [FAILED] Imagen did not return any bytes ---")
+            return {"error": "Imagen failed to generate image."}
         
-        print(f"--- [SUCCESS] Image received. Size: {len(image_bytes)/1024:.2f} KB ---")
+        print(f"--- [SUCCESS] Image generated! Size: {len(image_bytes)/1024:.2f} KB ---")
 
-        # 5. الرفع المباشر لـ Supabase (Direct Upload)
-        print(f"--- [STEP 3] Uploading to Supabase bucket: {BUCKET_NAME} ---")
+        # 4. الرفع لـ Supabase
         sb_client = create_client(SUPABASE_URL, SUPABASE_KEY)
-        file_name = f"nuclear_{int(time.time())}_{uuid.uuid4().hex[:4]}.png"
+        file_name = f"imagen_{int(time.time())}.png"
         
         storage = sb_client.storage.from_(BUCKET_NAME)
-        storage.upload(
-            path=file_name,
-            file=image_bytes,
-            file_options={"content-type": "image/png"}
-        )
+        storage.upload(path=file_name, file=image_bytes, file_options={"content-type": "image/png"})
 
         image_url = storage.get_public_url(file_name)
-        print(f"--- [DONE] Total Process Time: {time.time() - start_time:.2f}s | URL: {image_url} ---")
+        print(f"--- [DONE] URL: {image_url} ---")
 
         return {"image_url": image_url, "status": "success"}
 
