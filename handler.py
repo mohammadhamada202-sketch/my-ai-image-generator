@@ -1,76 +1,93 @@
 import os
 import uuid
+import subprocess
 import sys
-import runpod
 import time
 
-# قمنا بوضع الاستيراد داخل الدالة لضمان صيد أي خطأ في المكتبات
+# التأكد من تحميل المكتبات اللازمة
+try:
+    from supabase import create_client
+    from google import genai
+except ImportError:
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "supabase google-genai"])
+    from supabase import create_client
+    from google import genai
+
+import runpod
+from translator_helper import translate_and_optimize
+
+# --- إعدادات الاتصال ---
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "").strip()
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "").strip()
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "").strip()
+BUCKET_NAME = "MyFirstImagesTest1"
+
 def handler(job):
-    print("--- [START] HANDLER V6.0 - CHECKING WHY NO CREDIT IS USED ---")
+    start_time = time.time()
     try:
-        # 1. فحص المكتبات (هل هي مثبتة أصلاً؟)
-        try:
-            from google import genai
-            from supabase import create_client
-            print("--- [DEBUG] Libraries loaded successfully ---")
-        except Exception as lib_err:
-            print(f"--- [CRITICAL] Library Import Failed: {str(lib_err)} ---")
-            return {"error": f"Import error: {str(lib_err)}"}
-
-        # 2. فحص المفاتيح
-        api_key = os.environ.get("GEMINI_API_KEY", "").strip()
-        if not api_key:
-            print("--- [CRITICAL] GEMINI_API_KEY IS EMPTY! ---")
-            return {"error": "API Key Missing"}
-
-        # 3. محاولة الاتصال بـ Gemini (هنا تبدأ التكلفة)
-        print("--- [STEP] Initializing Gemini Client... ---")
-        client = genai.Client(api_key=api_key, http_options={'api_version': 'v1'})
+        # 1. وسم الإصدار الجديد
+        print("--- [START] NUCLEAR HANDLER V6.1 - FORCE IMAGE MODE ---")
         
+        client = genai.Client(api_key=GEMINI_API_KEY, http_options={'api_version': 'v1'})
         job_input = job.get('input', {})
-        prompt = job_input.get('prompt', 'Apple')
-
-        print(f"--- [STEP] Requesting Image for prompt: {prompt} ---")
+        user_text = job_input.get('prompt', 'Apple')
         
-        # محاولة التوليد مع صيد الخطأ الخاص بجوجل
-        try:
-            response = client.models.generate_content(
-                model='gemini-2.5-flash',
-                contents=[f"High-quality 4K image of {prompt}"]
-            )
-            print("--- [DEBUG] Gemini API call finished ---")
-        except Exception as gemini_err:
-            print(f"--- [FAILED] Gemini API Refused the call: {str(gemini_err)} ---")
-            return {"error": f"Gemini Error: {str(gemini_err)}"}
+        # 2. تحسين الوصف
+        print(f"--- [STEP 1] Optimizing prompt: {user_text} ---")
+        final_prompt = translate_and_optimize(user_text)
+        print(f"--- [DEBUG] Final Prompt: {final_prompt} ---")
 
-        # 4. فحص هل وصلت بيانات فعلاً؟
+        # 3. طلب الصورة بأوامر "نووية" صارمة
+        print("--- [STEP 2] Requesting Image (FORCE_IMAGE_ONLY) ---")
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=[
+                "IMPORTANT: YOU ARE AN IMAGE GENERATOR. DO NOT OUTPUT TEXT.",
+                "TASK: GENERATE_IMAGE",
+                f"High-quality 4K photorealistic image of: {final_prompt}",
+                "OUTPUT: IMAGE_DATA_ONLY"
+            ]
+        )
+
+        # 4. استخراج البيانات وفحصها
         image_bytes = None
         if response and response.candidates:
-            for part in response.candidates[0].content.parts:
-                if hasattr(part, 'inline_data'): image_bytes = part.inline_data.data
-                elif hasattr(part, 'data'): image_bytes = part.data
+            candidate = response.candidates[0]
+            # فحص كل أجزاء الرد بحثاً عن الصورة
+            for part in candidate.content.parts:
+                if hasattr(part, 'inline_data') and part.inline_data:
+                    image_bytes = part.inline_data.data
+                    break
+                elif hasattr(part, 'data') and part.data:
+                    image_bytes = part.data
+                    break
         
         if not image_bytes:
-            print("--- [WARNING] Gemini responded OK but sent NO IMAGE DATA ---")
-            return {"error": "No image data returned"}
+            # إذا لم نجد صورة، نطبع الرد النصي لنفهم لماذا رفض الموديل
+            print(f"--- [FAILED] No image data. Gemini Response: {response.text if hasattr(response, 'text') else 'Empty'} ---")
+            return {"error": "Gemini returned text instead of an image."}
+        
+        print(f"--- [SUCCESS] Image received. Size: {len(image_bytes)/1024:.2f} KB ---")
 
-        print(f"--- [SUCCESS] Image Data Received! Size: {len(image_bytes)} bytes ---")
+        # 5. الرفع المباشر لـ Supabase (بدون معالجة لتوفير الوقت)
+        print(f"--- [STEP 3] Uploading to Supabase bucket: {BUCKET_NAME} ---")
+        sb_client = create_client(SUPABASE_URL, SUPABASE_KEY)
+        file_name = f"nuclear_{int(time.time())}_{uuid.uuid4().hex[:4]}.png"
         
-        # 5. الرفع السريع لـ Supabase
-        sb_url = os.environ.get("SUPABASE_URL", "").strip()
-        sb_key = os.environ.get("SUPABASE_KEY", "").strip()
-        sb = create_client(sb_url, sb_key)
-        
-        file_name = f"final_test_{uuid.uuid4().hex[:5]}.png"
-        sb.storage.from_("MyFirstImagesTest1").upload(file_name, image_bytes)
-        
-        url = sb.storage.from_("MyFirstImagesTest1").get_public_url(file_name)
-        print(f"--- [DONE] Image Uploaded to: {url} ---")
-        
-        return {"url": url, "status": "success"}
+        storage = sb_client.storage.from_(BUCKET_NAME)
+        storage.upload(
+            path=file_name,
+            file=image_bytes,
+            file_options={"content-type": "image/png"}
+        )
 
-    except Exception as fatal_e:
-        print(f"--- [FATAL] Unexpected Crash: {str(fatal_e)} ---")
-        return {"error": str(fatal_e)}
+        image_url = storage.get_public_url(file_name)
+        print(f"--- [DONE] Image live at: {image_url} ---")
+
+        return {"image_url": image_url, "status": "success"}
+
+    except Exception as e:
+        print(f"--- [FATAL ERROR] {str(e)} ---")
+        return {"error": str(e)}
 
 runpod.serverless.start({"handler": handler})
