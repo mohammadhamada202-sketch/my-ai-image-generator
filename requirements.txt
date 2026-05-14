@@ -2,3 +2,4 @@ google-genai
 runpod
 openai
 Pillow
+supabase
