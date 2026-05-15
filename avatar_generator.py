@@ -7,43 +7,42 @@ import runpod
 from google import genai
 from supabase import create_client
 
-# الأنماط الخاصة بك
 AVATAR_STYLES = {
-    "photorealistic": "ultra-detailed professional cinematic portrait, hyper-realistic skin texture",
-    "anime": "high-quality anime style, vibrant colors, studio ghibli aesthetic",
-    "3d_render": "Disney Pixar style 3D avatar, Unreal Engine 5 render"
+    "photorealistic": "ultra-detailed professional cinematic portrait",
+    "anime": "high-quality anime style, studio ghibli aesthetic",
+    "3d_render": "Disney Pixar style 3D avatar"
 }
 
 def handler(job):
     try:
-        print("--- [START] GEMINI AVATAR TRANSFORMER ---")
+        print("--- [START] SMARTGEN - AVATAR TRANSFORMER V1.0 ---")
         job_input = job.get('input', {})
         image_url = job_input.get('image_url')
-        style_key = job_input.get('style', 'anime')
+        style_key = job_input.get('style', 'photorealistic')
 
-        if not image_url: return {"error": "image_url is required"}
+        if not image_url:
+            return {"error": "image_url is missing"}
 
-        # 1. تحميل الصورة وتحويلها لـ Base64
+        # 1. تجهيز الصورة
         img_data = requests.get(image_url).content
         img_b64 = base64.b64encode(img_data).decode('utf-8')
 
-        # 2. تشغيل Gemini (Nano Banana)
+        # 2. إعداد Gemini
         client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
-        style_prompt = AVATAR_STYLES.get(style_key, AVATAR_STYLES["anime"])
+        style_prompt = AVATAR_STYLES.get(style_key, AVATAR_STYLES["photorealistic"])
         instruction = f"Transform the person in this image into {style_prompt}. Preserve facial identity."
         
-        image_part = {"mime_type": "image/png", "data": img_b64}
+        # 3. طلب التحويل
         response = client.models.generate_content(
             model='gemini-1.5-flash',
-            contents=[instruction, image_part]
+            contents=[instruction, {"mime_type": "image/png", "data": img_b64}]
         )
 
-        # 3. استخراج البكسلات (Inline Data)
-        # ملاحظة: Gemini قد يرفض توليد صور بشرية في ألمانيا
+        # استخراج البكسلات (قد تواجه حظراً في ألمانيا لصور الوجوه)
         try:
             img_raw = response.candidates[0].content.parts[0].inline_data.data
         except:
-            return {"error": "Gemini refused to generate pixels. Check regional restrictions."}
+            return {"error": "Gemini pixels blocked in this region."}
 
         # 4. الرفع لـ Supabase
         sb = create_client(os.environ.get("SUPABASE_URL"), os.environ.get("SUPABASE_KEY"))
