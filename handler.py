@@ -5,10 +5,11 @@ import time
 import runpod
 from supabase import create_client
 
-# الإعدادات
+# جلب الإعدادات من RunPod
 STABILITY_API_KEY = os.environ.get("STABILITY_API_KEY", "").strip()
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "").strip()
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "").strip()
+BUCKET_NAME = "MyFirstImagesTest1"
 
 def handler(job):
     try:
@@ -17,7 +18,7 @@ def handler(job):
         prompt = job_input.get('prompt')
 
         if not prompt:
-            return {"error": "Prompt is missing in input"}
+            return {"error": "Prompt is missing. Please send a text prompt."}
 
         # طلب التوليد من Stability AI
         response = requests.post(
@@ -30,17 +31,19 @@ def handler(job):
         )
 
         if response.status_code != 200:
-            return {"error": response.text}
+            return {"error": f"Stability API Error: {response.text}"}
 
-        # الرفع لـ Supabase
+        # رفع النتيجة إلى Supabase
         img_bytes = base64.b64decode(response.json()["artifacts"][0]["base64"])
         sb = create_client(SUPABASE_URL, SUPABASE_KEY)
         file_name = f"gen_{int(time.time())}.png"
         
-        storage = sb.storage.from_("MyFirstImagesTest1")
+        storage = sb.storage.from_(BUCKET_NAME)
         storage.upload(path=file_name, file=img_bytes, file_options={"content-type": "image/png"})
         
-        return {"image_url": storage.get_public_url(file_name), "status": "success"}
+        url = storage.get_public_url(file_name)
+        print(f"--- [SUCCESS] Image generated at: {url} ---")
+        return {"image_url": url, "status": "success"}
 
     except Exception as e:
         return {"error": str(e)}
