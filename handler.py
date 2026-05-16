@@ -6,27 +6,25 @@ import requests
 import runpod
 from supabase import create_client
 
-# استدعاء المكتبات الرسمية
+# استدعاء المكتبة الرسمية لـ Together
 from together import Together
 
-# الاستيراد الدقيق والنظامي بناءً على ملفاتك ودوالك في مستودع GitHub
+# الاستيراد الدقيق من ملفات الإعدادات والمساعدين الخاصة بمستودعك
 from translator_helper import get_epic_prompt
-from styles_config import STYLE_ENHANCERS, AVATAR_NEGATIVE_PROMPT
-from dimensions_config import get_image_dimensions  # دالتك الاحترافية للمقاسات
+from styles_config import STYLE_CONFIGS  # استدعاء الهيكلية الجديدة والنظيفة
 
-# جلب إعدادات البيئة من RunPod
+# جلب متغيرات البيئة من RunPod
 TOGETHER_API_KEY = os.getenv("TOGETHER_API_KEY", "").strip()
-HF_TOKEN = os.getenv("HF_TOKEN", "").strip()  # مفتاح الـ Hugging Face الجديد الخاص بك
+HF_TOKEN = os.getenv("HF_TOKEN", "").strip()
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip().rstrip('/')
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", "").strip()
 BUCKET_NAME = "MyFirstImagesTest1"
 
 def handler(job):
     try:
-        print("--- [START] SMARTGEN HYBRID MULTI-ENGINE ---")
+        print("--- [START] SMARTGEN CLEAN ARCHITECTURE ENGINE ---")
         job_input = job.get('input', {})
         
-        # استلام المدخلات الأساسية من الموقع
         raw_prompt = job_input.get('prompt')
         style_key = job_input.get('style', 'photorealistic')
 
@@ -38,27 +36,27 @@ def handler(job):
         print("--- [STEP 1] Activating OpenAI Prompt Engineer (GPT-4o)... ---")
         optimized_prompt = get_epic_prompt(raw_prompt)
 
-        # 2. استدعاء النمط المناسب من ملف الأنماط الخاص بك
-        style_details = STYLE_ENHANCERS.get(style_key, STYLE_ENHANCERS["photorealistic"])
-        final_positive_prompt = f"{optimized_prompt}, {style_details}"
+        # 2. جلب إعدادات النمط والموديل المخصص له ديناميكياً من ملف الستايلات
+        # إذا لم يجد الستايل، يسحب ستايل photorealistic كافتراضي لضمان عدم توقف النظام
+        config = STYLE_CONFIGS.get(style_key, STYLE_CONFIGS["photorealistic"])
+        
+        provider = config["provider"]
+        target_model = config["model"]
+        style_enhancer = config["prompt_enhancer"]
+        
+        final_positive_prompt = f"{optimized_prompt}, {style_enhancer}"
 
         # 3. استدعاء الأبعاد والمقاسات الديناميكية
         width, height = get_image_dimensions(job_input)
-        print(f"--- [STEP 2] Style: {style_key} | Resolution: {width}x{height} ---")
+        print(f"--- [STEP 2] Routed -> Style: {style_key} | Provider: {provider} | Model: {target_model} ---")
 
-        # متغير لحفظ البايتات النهائية للصورة لتمريرها لـ Supabase
         image_bytes = None
-        engine_used = ""
 
-        # 4. شرط التوجيه الذكي (شرطي المرور) بناءً على الستايل المختار
-        if style_key == "cartoon":
-            print("--- [STEP 3] Routing to Hugging Face (Animagine XL 2D Engine)... ---")
-            engine_used = "Animagine XL (Hugging Face)"
+        # 4. التوجيه الذكي بناءً على الـ Provider المحدد داخل ملف الستايلات
+        if provider == "huggingface":
+            print(f"--- [STEP 3] Generating via Hugging Face Serverless API... ---")
+            HF_API_URL = f"https://api-inference.huggingface.co/models/{target_model}"
             
-            # رابط الـ API المجاني لموديل الأنمي والكرتون ثنائي الأبعاد البحت
-            HF_API_URL = "https://api-inference.huggingface.co/models/cagliostrolab/animagine-xl-3.1"
-            
-            # إرسال الطلب لـ Hugging Face
             response = requests.post(
                 HF_API_URL,
                 headers={"Authorization": f"Bearer {HF_TOKEN}"},
@@ -67,7 +65,7 @@ def handler(job):
                     "parameters": {
                         "width": width,
                         "height": height,
-                        "num_inference_steps": 28  # يعطي تفاصيل ممتازة للرسم المسطح
+                        "num_inference_steps": 28
                     }
                 }
             )
@@ -76,16 +74,13 @@ def handler(job):
                 print(f"--- [FAILED] Hugging Face Error: {response.text} ---")
                 return {"error": f"Hugging Face API Error: {response.text}"}
                 
-            # هقينج فيس يعيد بكسلات الصورة مباشرة (Binary Content)
             image_bytes = response.content
 
-        else:
-            print("--- [STEP 3] Routing to Together AI (FLUX Engine)... ---")
-            engine_used = "FLUX.1 [schnell] (Together AI)"
-            
+        elif provider == "together":
+            print(f"--- [STEP 3] Generating via Together Official SDK... ---")
             client = Together()
             response = client.images.generate(
-                model="black-forest-labs/FLUX.1-schnell",
+                model=target_model,
                 prompt=final_positive_prompt,
                 width=width,
                 height=height,
@@ -93,23 +88,23 @@ def handler(job):
                 response_format="b64_json"
             )
             
-            # استخراج البكسلات وفك تشفيرها من Together AI
             b64_data = response.data[0].b64_json
             image_bytes = base64.b64decode(b64_data)
+            
+        else:
+            return {"error": f"Unknown provider configured for style: {style_key}"}
 
         # 5. الرفع المشترك والمستقر إلى باكت Supabase
         print(f"--- [STEP 4] Uploading Output to Supabase bucket: {BUCKET_NAME} ---")
         sb_client = create_client(SUPABASE_URL, SUPABASE_KEY)
         
-        # تسمية الملف بناءً على المحرك المستخدم لمنع التداخل
         file_name = f"smartgen_{style_key}_{int(time.time())}.png"
         
         storage = sb_client.storage.from_(BUCKET_NAME)
         storage.upload(path=file_name, file=image_bytes, file_options={"content-type": "image/png"})
         
-        # جلب الرابط المباشر العام للصورة
         public_url = storage.get_public_url(file_name)
-        print(f"--- [SUCCESS] Image generated by {engine_used} is live! ---")
+        print(f"--- [SUCCESS] Engine processing complete. Image live! ---")
         
         return {
             "image_url": public_url,
@@ -117,7 +112,8 @@ def handler(job):
             "metadata": {
                 "style_used": style_key,
                 "dimensions": f"{width}x{height}",
-                "engine": engine_used
+                "provider_used": provider,
+                "model_used": target_model
             }
         }
 
@@ -125,5 +121,5 @@ def handler(job):
         print(f"--- [FATAL ERROR] ---: {str(e)}")
         return {"error": str(e)}
 
-# تشغيل السيرفر المستمر على RunPod والاستماع للموقع
+# تشغيل السيرفر المستمر على RunPod
 runpod.serverless.start({"handler": handler})
