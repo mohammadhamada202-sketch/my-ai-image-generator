@@ -11,7 +11,7 @@ from together import Together
 
 # الاستيراد الدقيق من ملفات الإعدادات والمساعدين الخاصة بمستودعك
 from translator_helper import get_epic_prompt
-from styles_config import STYLE_CONFIGS  # استدعاء الهيكلية الجديدة والنظيفة
+from styles_config import STYLE_CONFIGS, AVATAR_NEGATIVE_PROMPT  # استدعاء الهيكلية الجديدة والنظيفة
 
 # جلب متغيرات البيئة من RunPod
 TOGETHER_API_KEY = os.getenv("TOGETHER_API_KEY", "").strip()
