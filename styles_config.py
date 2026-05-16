@@ -9,11 +9,11 @@ STYLE_CONFIGS = {
         "prompt_enhancer": "highly detailed 8k raw photo, cinematic corporate portrait, shot on 85mm lens, sharp focus, natural skin texture, realistic lighting, masterpiece"
     },
     
-    # 2. كرتون كلاسيكي مسطح 2D عبر محرك SDXL المستقر
+    # 2. نمط كرتون غربي لطيف (Western Cartoon / Toonme Style)
     "cartoon": {
         "provider": "together",
         "model": "stabilityai/stable-diffusion-xl-base-1.0",
-        "prompt_enhancer": "vibrant 1990s 2D flat cartoon style, vintage western animation cell art, Hanna-Barbera and early Disney aesthetic, solid bold block colors, thick black outlines, minimal flat shading, absolutely NO depth, NO textures, NO realistic lighting, NO detailed render, clean classic vector graphic, masterpiece"
+        "prompt_enhancer": "cute 2D western cartoon style, adorable character design, vibrant soft colors, smooth digital vector art, clean distinct ink outlines, happy friendly aesthetic, storybook illustration, children book graphics, simple flat shading, NO anime, NO realism, masterpiece"
     },
     
     # 3. أنمي
