@@ -1,25 +1,63 @@
-STYLE_ENHANCERS = {
-    # 1. الواقعي (إضاءة وتفاصيل مسام الجلد والعدسة)
-    "photorealistic": "highly detailed 8k raw photo, cinematic corporate portrait, shot on 85mm lens, sharp focus, natural skin texture, realistic lighting, masterpiece",
+# styles_config.py
+
+# خريطة الأنماط والموديلات الذكية لـ SmartGenAI
+STYLE_CONFIGS = {
+    # 1. الواقعي
+    "photorealistic": {
+        "provider": "together",
+        "model": "black-forest-labs/FLUX.1-schnell",
+        "prompt_enhancer": "highly detailed 8k raw photo, cinematic corporate portrait, shot on 85mm lens, sharp focus, natural skin texture, realistic lighting, masterpiece"
+    },
     
-    # 2. كرتون بحت (مسطح 2D 100%، ستايل لوحات ديزني القديمة وتوم وجيري)
-    "cartoon": "pure 2D classic cartoon style, early Disney and Hanna-Barbera animation cell, flat cel-shading, completely solid colors, thick dark ink outlines, bold stylized character design, retro cartoon graphics, NO 3D, NO depth, NO gradients, NO shadows, masterpiece",
+    # 2. كرتون بحت (موجه لـ Hugging Face)
+    "cartoon": {
+        "provider": "huggingface",
+        "model": "cagliostrolab/animagine-xl-3.1",
+        "prompt_enhancer": "pure 2D classic cartoon style, flat cel-shading, completely solid colors, thick dark ink outlines, bold stylized character design, retro cartoon graphics, NO 3D, NO depth, masterpiece"
+    },
+
+    # 3. أنمي
+    "anime": {
+        "provider": "together",
+        "model": "black-forest-labs/FLUX.1-schnell",
+        "prompt_enhancer": "authentic Japanese anime style, 1990s anime aesthetic, sharp cinematic lineart, vivid anime color grading, masterpiece"
+    },
     
-    # 3. أنمي (خلطة كابتن ماجد والأنمي الواقعي الحديث)
-    "anime": "90s hand-drawn anime aesthetic, classic Japanese cel-shaded animation style, Captain Tsubasa and retro anime vibe, sharp line art, cinematic anime lighting, vivid anime color grading, masterpiece",
-    
-    # 4. نمط بيكسار (ثلاثي أبعاد مجسم، ناعم ولطيف)
-    "pixar": "official Disney Pixar 3D animation character style, render preview, claymation style, smooth round features, detailed hair strands, subsurface scattering skin, playful studio lighting, cute 3D asset",
+    # 4. نمط بيكسار
+    "pixar": {
+        "provider": "together",
+        "model": "black-forest-labs/FLUX.1-schnell",
+        "prompt_enhancer": "official Disney Pixar 3D animation character style, smooth round features, detailed hair strands, playful studio lighting, cute 3D asset"
+    },
     
     # 5. بيكسل آرت
-    "pixel_art": "meticulous 8-bit pixel art, retro video game aesthetic, sharp vibrant pixels, iconic character design, masterpiece",
+    "pixel_art": {
+        "provider": "together",
+        "model": "black-forest-labs/FLUX.1-schnell",
+        "prompt_enhancer": "meticulous 8-bit pixel art, retro video game aesthetic, sharp vibrant pixels, masterpiece"
+    },
     
     # 6. رسم يدوي (سكتش)
-    "sketch": "professional charcoal drawing, hand-drawn strokes, artistic hatching, high contrast, textured paper aesthetic, masterpiece",
+    "sketch": {
+        "provider": "together",
+        "model": "black-forest-labs/FLUX.1-schnell",
+        "prompt_enhancer": "professional charcoal drawing, hand-drawn strokes, artistic hatching, high contrast, textured paper aesthetic, masterpiece"
+    },
     
-    # 7. ريندر ثلاثي الأبعاد (Unreal Engine 5)
-    "3d_render": "highly detailed 3D character, Unreal Engine 5 render, ray tracing, polished textures, volumetric lighting, octane render, masterpiece",
+    # 7. ريندر ثلاثي الأبعاد
+    "3d_render": {
+        "provider": "together",
+        "model": "black-forest-labs/FLUX.1-schnell",
+        "prompt_enhancer": "highly detailed 3D character, Unreal Engine 5 render, ray tracing, polished textures, volumetric lighting, masterpiece"
+    },
     
     # 8. تجريدي
-    "abstract": "abstract digital art portrait, geometric shapes, double exposure, vibrant neon color splashes, artistic expression, masterpiece"
+    "abstract": {
+        "provider": "together",
+        "model": "black-forest-labs/FLUX.1-schnell",
+        "prompt_enhancer": "abstract digital art portrait, geometric shapes, double exposure, vibrant neon color splashes, artistic expression, masterpiece"
+    }
 }
+
+# البرومبت السلبي الموحد لضمان الجودة
+AVATAR_NEGATIVE_PROMPT = "lowres, bad anatomy, bad hands, text, error, cropped, worst quality, low quality, blurry, grainy, deformed face, unrecognizable, watermark"
