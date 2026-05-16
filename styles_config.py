@@ -9,10 +9,10 @@ STYLE_CONFIGS = {
         "prompt_enhancer": "highly detailed 8k raw photo, cinematic corporate portrait, shot on 85mm lens, sharp focus, natural skin texture, realistic lighting, masterpiece"
     },
     
-    # 2. كرتون كلاسيكي مسطح (تغيير شامل لإلغاء أي طابع أنمي أو واقعي)
+    # 2. كرتون كلاسيكي مسطح 2D عبر محرك SDXL المستقر
     "cartoon": {
         "provider": "together",
-        "model": "black-forest-labs/FLUX.1-schnell",
+        "model": "stabilityai/stable-diffusion-xl-base-1.0",
         "prompt_enhancer": "vibrant 1990s 2D flat cartoon style, vintage western animation cell art, Hanna-Barbera and early Disney aesthetic, solid bold block colors, thick black outlines, minimal flat shading, absolutely NO depth, NO textures, NO realistic lighting, NO detailed render, clean classic vector graphic, masterpiece"
     },
     
