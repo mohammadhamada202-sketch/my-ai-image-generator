@@ -9,20 +9,21 @@ from supabase import create_client
 # استدعاء المكتبة الرسمية لـ Together
 from together import Together
 
-# الاستيراد الدقيق من ملفات الإعدادات والمساعدين الخاصة بمستودعك
+# الاستيراد الدقيق والنظامي لملفات الإعدادات والمساعدين من مستودعك
 from translator_helper import get_epic_prompt
-from styles_config import STYLE_CONFIGS, AVATAR_NEGATIVE_PROMPT  # استدعاء الهيكلية الجديدة والنظيفة
+from styles_config import STYLE_CONFIGS
+from dimensions_config import get_image_dimensions  # استدعاء دالتك الاحترافية التي أرسلتها بالملي
 
 # جلب متغيرات البيئة من RunPod
 TOGETHER_API_KEY = os.getenv("TOGETHER_API_KEY", "").strip()
-HF_TOKEN = os.getenv("HF_TOKEN", "").strip()
+HF_TOKEN = os.getenv("HF_TOKEN", "").strip()  # مفتاح هقينج فيس الجديد للكرتون المجاني
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip().rstrip('/')
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", "").strip()
 BUCKET_NAME = "MyFirstImagesTest1"
 
 def handler(job):
     try:
-        print("--- [START] SMARTGEN CLEAN ARCHITECTURE ENGINE ---")
+        print("--- [START] SMARTGEN CLEAN HYBRID ENGINE ---")
         job_input = job.get('input', {})
         
         raw_prompt = job_input.get('prompt')
@@ -36,8 +37,7 @@ def handler(job):
         print("--- [STEP 1] Activating OpenAI Prompt Engineer (GPT-4o)... ---")
         optimized_prompt = get_epic_prompt(raw_prompt)
 
-        # 2. جلب إعدادات النمط والموديل المخصص له ديناميكياً من ملف الستايلات
-        # إذا لم يجد الستايل، يسحب ستايل photorealistic كافتراضي لضمان عدم توقف النظام
+        # 2. جلب إعدادات النمط والموديل المخصص له ديناميكياً من ملف الستايلات الخاص بك
         config = STYLE_CONFIGS.get(style_key, STYLE_CONFIGS["photorealistic"])
         
         provider = config["provider"]
@@ -46,15 +46,15 @@ def handler(job):
         
         final_positive_prompt = f"{optimized_prompt}, {style_enhancer}"
 
-        # 3. استدعاء الأبعاد والمقاسات الديناميكية
+        # 3. استدعاء دالتك الاحترافية لجلب الأبعاد والمقاسات الديناميكية
         width, height = get_image_dimensions(job_input)
-        print(f"--- [STEP 2] Routed -> Style: {style_key} | Provider: {provider} | Model: {target_model} ---")
+        print(f"--- [STEP 2] Routed -> Style: {style_key} | Provider: {provider} | Model: {target_model} | Resolution: {width}x{height} ---")
 
         image_bytes = None
 
-        # 4. التوجيه الذكي بناءً على الـ Provider المحدد داخل ملف الستايلات
+        # 4. التوجيه الذكي (شرطي المرور) بناءً على الـ Provider المحدد داخل ملف الستايلات
         if provider == "huggingface":
-            print(f"--- [STEP 3] Generating via Hugging Face Serverless API... ---")
+            print(f"--- [STEP 3] Generating via Hugging Face Serverless API (Free 2D)... ---")
             HF_API_URL = f"https://api-inference.huggingface.co/models/{target_model}"
             
             response = requests.post(
@@ -65,7 +65,7 @@ def handler(job):
                     "parameters": {
                         "width": width,
                         "height": height,
-                        "num_inference_steps": 28
+                        "num_inference_steps": 28  # خطوات كافية لجودة الكرتون الـ 2D الصافية
                     }
                 }
             )
@@ -77,14 +77,14 @@ def handler(job):
             image_bytes = response.content
 
         elif provider == "together":
-            print(f"--- [STEP 3] Generating via Together Official SDK... ---")
+            print(f"--- [STEP 3] Generating via Together Official SDK (FLUX Engine)... ---")
             client = Together()
             response = client.images.generate(
                 model=target_model,
                 prompt=final_positive_prompt,
                 width=width,
                 height=height,
-                steps=4,
+                steps=4,  # موديل فلوكس شنيل يحتاج 4 خطوات فقط
                 response_format="b64_json"
             )
             
@@ -98,6 +98,7 @@ def handler(job):
         print(f"--- [STEP 4] Uploading Output to Supabase bucket: {BUCKET_NAME} ---")
         sb_client = create_client(SUPABASE_URL, SUPABASE_KEY)
         
+        # تسمية فريدة للملف تمنع التداخل والتكرار في الباكت
         file_name = f"smartgen_{style_key}_{int(time.time())}.png"
         
         storage = sb_client.storage.from_(BUCKET_NAME)
