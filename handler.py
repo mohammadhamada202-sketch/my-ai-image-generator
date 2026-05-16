@@ -55,7 +55,8 @@ def handler(job):
         # 4. التوجيه الذكي (شرطي المرور) بناءً على الـ Provider المحدد داخل ملف الستايلات
         if provider == "huggingface":
             print(f"--- [STEP 3] Generating via Hugging Face Serverless API (Free 2D)... ---")
-            HF_API_URL = f"https://api-inference.huggingface.co/models/{target_model}"
+            # الرابط الرسمي المحدث لضمان التوجيه الصحيح لموديلات الصور
+            HF_API_URL = f"https://api-inference.huggingface.co/pipeline/text-to-image/{target_model}"
             
             response = requests.post(
                 HF_API_URL,
