@@ -9,13 +9,13 @@ STYLE_CONFIGS = {
         "prompt_enhancer": "highly detailed 8k raw photo, cinematic corporate portrait, shot on 85mm lens, sharp focus, natural skin texture, realistic lighting, masterpiece"
     },
     
-    # 2. كرتون بحت (تغيير الموديل إلى الموديل المستقر والمفتوح رسميًا على هقينج فيس)
+    # 2. كرتون بحت (تحويل المسار إلى Together AI باستخدام موديل SDXL الذي يطيع رسم الـ 2D)
     "cartoon": {
-        "provider": "huggingface",
+        "provider": "together",
         "model": "stabilityai/stable-diffusion-xl-base-1.0",
-        "prompt_enhancer": "vibrant 2D classic cartoon style, flat cel-shading, completely solid colors, thick dark ink outlines, early Disney and Hanna-Barbera animation cell, retro cartoon graphics, NO 3D, NO depth, masterpiece"
+        "prompt_enhancer": "pure 2D classic cartoon style, flat cel-shading, completely solid colors, thick dark ink outlines, early Disney and Hanna-Barbera animation cell, retro cartoon graphics, NO 3D, NO depth, NO realism, masterpiece"
     },
-
+    
     # 3. أنمي
     "anime": {
         "provider": "together",
