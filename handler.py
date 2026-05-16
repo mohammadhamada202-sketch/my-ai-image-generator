@@ -10,7 +10,7 @@ from together import Together
 
 # الاستيراد الدقيق والنظامي بناءً على أسماء ملفاتك ودوالك في مستودع GitHub
 from translator_helper import get_epic_prompt
-from styles_config import STYLE_ENHANCERS, AVATAR_NEGATIVE_PROMPT
+from styles_config import STYLE_ENHANCERS
 from dimensions_config import get_image_dimensions  # دالتك الاحترافية للمقاسات
 
 # جلب إعدادات بيئة التخزين لـ Supabase من RunPod
