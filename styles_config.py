@@ -2,9 +2,9 @@ STYLE_ENHANCERS = {
     # 1. الواقعي (إضاءة وتفاصيل مسام الجلد والعدسة)
     "photorealistic": "highly detailed 8k raw photo, cinematic corporate portrait, shot on 85mm lens, sharp focus, natural skin texture, realistic lighting, masterpiece",
     
-    # 2. كرتون (توم وجيري والأنماط الكلاسيكية - إلغاء الـ 3D تماماً)
-    "cartoon": "classic 1990s 2D hand-drawn animation style, vintage Warner Bros and Hanna-Barbera aesthetic, flat bold vibrant colors, solid black outlines, retro cartoon look, NO 3D, NO shading, masterpiece",
-
+    # 2. كرتون بحت (مسطح 2D 100%، ستايل لوحات ديزني القديمة وتوم وجيري)
+    "cartoon": "pure 2D classic cartoon style, early Disney and Hanna-Barbera animation cell, flat cel-shading, completely solid colors, thick dark ink outlines, bold stylized character design, retro cartoon graphics, NO 3D, NO depth, NO gradients, NO shadows, masterpiece",
+    
     # 3. أنمي (خلطة كابتن ماجد والأنمي الواقعي الحديث)
     "anime": "90s hand-drawn anime aesthetic, classic Japanese cel-shaded animation style, Captain Tsubasa and retro anime vibe, sharp line art, cinematic anime lighting, vivid anime color grading, masterpiece",
     
