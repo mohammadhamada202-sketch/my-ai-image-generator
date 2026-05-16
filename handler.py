@@ -9,14 +9,14 @@ from supabase import create_client
 # استدعاء المكتبة الرسمية لـ Together
 from together import Together
 
-# الاستيراد الدقيق والنظامي لملفات الإعدادات والمساعدين من مستودعك
+# الاستيراد النظامي للملفات المساعدة المستضافة في مستودعك الخاص
 from translator_helper import get_epic_prompt
 from styles_config import STYLE_CONFIGS
-from dimensions_config import get_image_dimensions  # استدعاء دالتك الاحترافية التي أرسلتها بالملي
+from dimensions_config import get_image_dimensions
 
-# جلب متغيرات البيئة من RunPod
+# جلب متغيرات البيئة الحساسة من إعدادات RunPod
 TOGETHER_API_KEY = os.getenv("TOGETHER_API_KEY", "").strip()
-HF_TOKEN = os.getenv("HF_TOKEN", "").strip()  # مفتاح هقينج فيس الجديد للكرتون المجاني
+HF_TOKEN = os.getenv("HF_TOKEN", "").strip()  # مفتاح هقينج فيس للكرتون ثنائي الأبعاد
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip().rstrip('/')
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", "").strip()
 BUCKET_NAME = "MyFirstImagesTest1"
@@ -33,11 +33,11 @@ def handler(job):
             print("--- [ERROR] Input prompt is missing ---")
             return {"error": "Prompt is missing."}
 
-        # 1. استدعاء المترجم والمحسن الذكي (GPT-4o)
+        # 1. استدعاء المترجم والمحسن الذكي (GPT-4o) المتصل بموقعك
         print("--- [STEP 1] Activating OpenAI Prompt Engineer (GPT-4o)... ---")
         optimized_prompt = get_epic_prompt(raw_prompt)
 
-        # 2. جلب إعدادات النمط والموديل المخصص له ديناميكياً من ملف الستايلات الخاص بك
+        # 2. جلب إعدادات النمط والموديل والـ Provider ديناميكياً من ملف الستايلات
         config = STYLE_CONFIGS.get(style_key, STYLE_CONFIGS["photorealistic"])
         
         provider = config["provider"]
@@ -46,35 +46,29 @@ def handler(job):
         
         final_positive_prompt = f"{optimized_prompt}, {style_enhancer}"
 
-        # 3. استدعاء دالتك الاحترافية لجلب الأبعاد والمقاسات الديناميكية
+        # 3. استدعاء دالتك الاحترافية لتحديد الأبعاد والمقاسات الديناميكية
         width, height = get_image_dimensions(job_input)
         print(f"--- [STEP 2] Routed -> Style: {style_key} | Provider: {provider} | Model: {target_model} | Resolution: {width}x{height} ---")
 
         image_bytes = None
 
-        # 4. التوجيه الذكي (شرطي المرور) بناءً على الـ Provider المحدد داخل ملف الستايلات
+        # 4. بوابات التوجيه الذكية (توزيع المهام بين السيرفرات)
         if provider == "huggingface":
             print(f"--- [STEP 3] Generating via Hugging Face Serverless API (Free 2D)... ---")
-            # الرابط الرسمي المحدث لضمان التوجيه الصحيح لموديلات الصور
-            HF_API_URL = f"https://api-inference.huggingface.co/pipeline/text-to-image/{target_model}"
+            HF_API_URL = f"https://api-inference.huggingface.co/models/{target_model}"
             
+            # إرسال النص الصافي فقط لضمان قبول السيرفر المجاني للطلب بدون أخطاء التوجيه
             response = requests.post(
                 HF_API_URL,
                 headers={"Authorization": f"Bearer {HF_TOKEN}"},
-                json={
-                    "inputs": final_positive_prompt,
-                    "parameters": {
-                        "width": width,
-                        "height": height,
-                        "num_inference_steps": 28  # خطوات كافية لجودة الكرتون الـ 2D الصافية
-                    }
-                }
+                json={"inputs": final_positive_prompt}
             )
             
             if response.status_code != 200:
                 print(f"--- [FAILED] Hugging Face Error: {response.text} ---")
                 return {"error": f"Hugging Face API Error: {response.text}"}
                 
+            # استقبال بايتات الصورة الخام مباشرة
             image_bytes = response.content
 
         elif provider == "together":
@@ -85,26 +79,28 @@ def handler(job):
                 prompt=final_positive_prompt,
                 width=width,
                 height=height,
-                steps=4,  # موديل فلوكس شنيل يحتاج 4 خطوات فقط
+                steps=4,
                 response_format="b64_json"
             )
             
+            # فك تشفير البكسلات القادمة من Together AI
             b64_data = response.data[0].b64_json
             image_bytes = base64.b64decode(b64_data)
             
         else:
             return {"error": f"Unknown provider configured for style: {style_key}"}
 
-        # 5. الرفع المشترك والمستقر إلى باكت Supabase
+        # 5. خطوة الرفع المشتركة والمستقرة إلى باكت الـ Supabase الخاص بك
         print(f"--- [STEP 4] Uploading Output to Supabase bucket: {BUCKET_NAME} ---")
         sb_client = create_client(SUPABASE_URL, SUPABASE_KEY)
         
-        # تسمية فريدة للملف تمنع التداخل والتكرار في الباكت
+        # توليد اسم فريد يعتمد على الوقت تلافياً لتكرار أو مسح الصور
         file_name = f"smartgen_{style_key}_{int(time.time())}.png"
         
         storage = sb_client.storage.from_(BUCKET_NAME)
         storage.upload(path=file_name, file=image_bytes, file_options={"content-type": "image/png"})
         
+        # استخراج الرابط المباشر والنهائي وإرساله لواجهة موقعك
         public_url = storage.get_public_url(file_name)
         print(f"--- [SUCCESS] Engine processing complete. Image live! ---")
         
@@ -123,5 +119,5 @@ def handler(job):
         print(f"--- [FATAL ERROR] ---: {str(e)}")
         return {"error": str(e)}
 
-# تشغيل السيرفر المستمر على RunPod
+# تشغيل السيرفر المستمر والاستماع للطلبات القادمة من موقعك
 runpod.serverless.start({"handler": handler})
