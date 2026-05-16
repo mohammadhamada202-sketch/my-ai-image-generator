@@ -2,28 +2,26 @@
 import os
 import base64
 import time
-import requests
 import runpod
 from supabase import create_client
 
 # استدعاء المكتبة الرسمية لـ Together
 from together import Together
 
-# الاستيراد النظامي للملفات المساعدة المستضافة في مستودعك الخاص
+# الاستيراد النظامي والمستقر للملفات المساعدة من مستودع الـ GitHub الخاص بك
 from translator_helper import get_epic_prompt
 from styles_config import STYLE_CONFIGS
 from dimensions_config import get_image_dimensions
 
-# جلب متغيرات البيئة الحساسة من إعدادات RunPod
+# جلب متغيرات البيئة من إعدادات RunPod
 TOGETHER_API_KEY = os.getenv("TOGETHER_API_KEY", "").strip()
-HF_TOKEN = os.getenv("HF_TOKEN", "").strip()  # مفتاح هقينج فيس للكرتون ثنائي الأبعاد
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip().rstrip('/')
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", "").strip()
 BUCKET_NAME = "MyFirstImagesTest1"
 
 def handler(job):
     try:
-        print("--- [START] SMARTGEN CLEAN HYBRID ENGINE ---")
+        print("--- [START] SMARTGEN ALL-TOGETHER UNIFIED ENGINE ---")
         job_input = job.get('input', {})
         
         raw_prompt = job_input.get('prompt')
@@ -33,76 +31,55 @@ def handler(job):
             print("--- [ERROR] Input prompt is missing ---")
             return {"error": "Prompt is missing."}
 
-        # 1. استدعاء المترجم والمحسن الذكي (GPT-4o) المتصل بموقعك
+        # 1. استدعاء المترجم والمحسن الذكي (GPT-4o) لتهيئة النص سينمائياً
         print("--- [STEP 1] Activating OpenAI Prompt Engineer (GPT-4o)... ---")
         optimized_prompt = get_epic_prompt(raw_prompt)
 
-        # 2. جلب إعدادات النمط والموديل والـ Provider ديناميكياً من ملف الستايلات
+        # 2. جلب إعدادات النمط والموديل المخصص له ديناميكياً من ملف الستايلات الخاص بك
         config = STYLE_CONFIGS.get(style_key, STYLE_CONFIGS["photorealistic"])
         
-        provider = config["provider"]
         target_model = config["model"]
         style_enhancer = config["prompt_enhancer"]
         
         final_positive_prompt = f"{optimized_prompt}, {style_enhancer}"
 
-        # 3. استدعاء دالتك الاحترافية لتحديد الأبعاد والمقاسات الديناميكية
+        # 3. استدعاء دالتك الاحترافية لجلب الأبعاد والمقاسات الديناميكية المستقرة
         width, height = get_image_dimensions(job_input)
-        print(f"--- [STEP 2] Routed -> Style: {style_key} | Provider: {provider} | Model: {target_model} | Resolution: {width}x{height} ---")
+        print(f"--- [STEP 2] Routed -> Style: {style_key} | Model: {target_model} | Resolution: {width}x{height} ---")
 
-        image_bytes = None
+        # 4. التوليد المستقر والسريع عبر مكتبة Together Official SDK
+        print(f"--- [STEP 3] Generating via Together Official SDK... ---")
+        client = Together()
+        
+        # تحديد عدد الخطوات تلقائياً بناءً على الموديل (FLUX يحتاج 4 خطوات، بينما SDXL يفضل 20-30 خطوة لتفاصيل الكرتون)
+        steps_count = 4 if "flux" in target_model.lower() else 25
 
-        # 4. بوابات التوجيه الذكية (توزيع المهام بين السيرفرات)
-        if provider == "huggingface":
-            print(f"--- [STEP 3] Generating via Hugging Face Serverless API (Free 2D)... ---")
-            HF_API_URL = f"https://api-inference.huggingface.co/models/{target_model}"
-            
-            # إرسال النص الصافي فقط لضمان قبول السيرفر المجاني للطلب بدون أخطاء التوجيه
-            response = requests.post(
-                HF_API_URL,
-                headers={"Authorization": f"Bearer {HF_TOKEN}"},
-                json={"inputs": final_positive_prompt}
-            )
-            
-            if response.status_code != 200:
-                print(f"--- [FAILED] Hugging Face Error: {response.text} ---")
-                return {"error": f"Hugging Face API Error: {response.text}"}
-                
-            # استقبال بايتات الصورة الخام مباشرة
-            image_bytes = response.content
+        response = client.images.generate(
+            model=target_model,
+            prompt=final_positive_prompt,
+            width=width,
+            height=height,
+            steps=steps_count,
+            response_format="b64_json"
+        )
+        
+        # استخراج البكسلات وفك تشفيرها
+        b64_data = response.data[0].b64_json
+        image_bytes = base64.b64decode(b64_data)
 
-        elif provider == "together":
-            print(f"--- [STEP 3] Generating via Together Official SDK (FLUX Engine)... ---")
-            client = Together()
-            response = client.images.generate(
-                model=target_model,
-                prompt=final_positive_prompt,
-                width=width,
-                height=height,
-                steps=4,
-                response_format="b64_json"
-            )
-            
-            # فك تشفير البكسلات القادمة من Together AI
-            b64_data = response.data[0].b64_json
-            image_bytes = base64.b64decode(b64_data)
-            
-        else:
-            return {"error": f"Unknown provider configured for style: {style_key}"}
-
-        # 5. خطوة الرفع المشتركة والمستقرة إلى باكت الـ Supabase الخاص بك
+        # 5. الرفع المستقر والسريع إلى باكت Supabase الخاص بك
         print(f"--- [STEP 4] Uploading Output to Supabase bucket: {BUCKET_NAME} ---")
         sb_client = create_client(SUPABASE_URL, SUPABASE_KEY)
         
-        # توليد اسم فريد يعتمد على الوقت تلافياً لتكرار أو مسح الصور
+        # توليد اسم فريد للملف يعتمد على الستايل والوقت الحالي لمنع التكرار
         file_name = f"smartgen_{style_key}_{int(time.time())}.png"
         
         storage = sb_client.storage.from_(BUCKET_NAME)
         storage.upload(path=file_name, file=image_bytes, file_options={"content-type": "image/png"})
         
-        # استخراج الرابط المباشر والنهائي وإرساله لواجهة موقعك
+        # جلب الرابط العام والمباشر لإرساله للموقع
         public_url = storage.get_public_url(file_name)
-        print(f"--- [SUCCESS] Engine processing complete. Image live! ---")
+        print(f"--- [SUCCESS] Image processing complete. Live URL: {public_url} ---")
         
         return {
             "image_url": public_url,
@@ -110,8 +87,8 @@ def handler(job):
             "metadata": {
                 "style_used": style_key,
                 "dimensions": f"{width}x{height}",
-                "provider_used": provider,
-                "model_used": target_model
+                "model_used": target_model,
+                "steps": steps_count
             }
         }
 
@@ -119,5 +96,5 @@ def handler(job):
         print(f"--- [FATAL ERROR] ---: {str(e)}")
         return {"error": str(e)}
 
-# تشغيل السيرفر المستمر والاستماع للطلبات القادمة من موقعك
+# تشغيل السيرفر المستمر على RunPod والاستماع لطلبات موقعك
 runpod.serverless.start({"handler": handler})
