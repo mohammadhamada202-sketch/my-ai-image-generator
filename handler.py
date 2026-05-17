@@ -8,9 +8,10 @@ import time
 import runpod
 from supabase import create_client
 
-# استدعاء كلاس توليد الصور الرسمي والمباشر من Google Vertex AI
-from google.cloud import aiplatform
-from google.cloud.aiplatform.models import ImageGenerationModel
+# استدعاء مكتبة Google Cloud الرسمية لـ Vertex AI
+import vertexai
+# الاستدعاء المتوافق والمستقر لكلاس توليد الصور من المسار الحصري للـ Preview
+from vertexai.preview.vision_models import ImageGenerationModel
 
 # الاستيراد المباشر من ملفات مشروعك
 from translator_helper import get_epic_prompt
@@ -55,8 +56,8 @@ def handler(job):
         width, height = get_image_dimensions(job_input)
         print(f"--- [ROUTE] Style: {style_key} | Engine: GOOGLE VERTEX AI ({target_model}) ---")
 
-        # ⚡️ تهيئة اتصال واجهة Google Vertex AI بالمشروع والمنطقة
-        aiplatform.init(project=GOOGLE_PROJECT_ID, location=GOOGLE_LOCATION)
+        # ⚡️ تهيئة واجهة Google Vertex AI بالمشروع والمنطقة
+        vertexai.init(project=GOOGLE_PROJECT_ID, location=GOOGLE_LOCATION)
         
         # تحويل الأبعاد الرقمية إلى نسب الـ Aspect Ratio الذكية لـ Imagen 3
         aspect_ratio = "1:1"
@@ -65,7 +66,7 @@ def handler(job):
         elif height > width: 
             aspect_ratio = "9:16"
 
-        # 🛠️ الحل السحري: استدعاء الموديل مباشرة بالطريقة الحصرية للصور من جوجل
+        # 🛠️ استدعاء الموديل من خلال المسار المحدث والمستقر
         print(f"--- [CALL] Loading Google Image Generation Model: {target_model} ---")
         model = ImageGenerationModel.from_pretrained(target_model)
         
@@ -77,7 +78,7 @@ def handler(job):
             output_mime_type="image/png"
         )
         
-        # استخراج البايتات مباشرة من الكائن المرتجع دون الحاجة لفك تشفير معقد
+        # استخراج البايتات مباشرة من أول صورة مرتجعة
         image_bytes = response.images[0]._image_bytes
 
         # 📦 الرفع المشترك إلى باكت Supabase الخاص بك
