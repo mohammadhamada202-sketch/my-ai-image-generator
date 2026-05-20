@@ -1,6 +1,15 @@
-google-cloud-aiplatform
-google-genai
+# الأساسيات
 runpod
-openai
-Pillow
 supabase
+pillow
+requests
+numpy
+
+# معالجة الصور والذكاء البصري
+opencv-python-headless
+mediapipe
+rembg
+
+# جوجل (Vertex AI)
+google-cloud-aiplatform
+# google-genai  <-- قمنا باستبدالها بـ cloud-aiplatform، يمكنك حذفها إذا كنت لا تستخدمها في مكان آخر
